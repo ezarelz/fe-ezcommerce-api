@@ -170,7 +170,16 @@ export default function ProductDetailPage() {
             <p className='mt-2 text-2xl font-semibold'>{formattedPrice}</p>
 
             <div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-700'>
-              <span>⭐ {ratingText}</span>
+              <span className='inline-flex items-center gap-1'>
+                <Image
+                  src='/icons/star-rating.svg'
+                  alt='rating'
+                  width={14}
+                  height={14}
+                  className='inline-block'
+                />
+                {ratingText}
+              </span>
               <span>• {p.reviewCount} reviews</span>
               <span>• {p.soldCount} sold</span>
               <span>• Stock: {p.stock}</span>
@@ -208,7 +217,7 @@ export default function ProductDetailPage() {
                 <div className='inline-flex items-center rounded-lg border'>
                   <button
                     aria-label='decrease'
-                    className='px-3 py-2 disabled:opacity-50'
+                    className='px-3 py-2 cursor-pointer disabled:opacity-50'
                     onClick={() => setQty((q) => Math.max(1, q - 1))}
                     disabled={qty <= 1}
                   >
@@ -217,7 +226,7 @@ export default function ProductDetailPage() {
                   <div className='px-4 py-2 min-w-10 text-center'>{qty}</div>
                   <button
                     aria-label='increase'
-                    className='px-3 py-2 disabled:opacity-50'
+                    className='px-3 py-2 cursor-pointer disabled:opacity-50'
                     onClick={() =>
                       setQty((q) =>
                         Math.min(
@@ -252,8 +261,18 @@ export default function ProductDetailPage() {
           <h2 className='text-lg sm:text-xl font-semibold mb-3'>
             Product Reviews
           </h2>
-          <div className='text-sm text-zinc-700 mb-4'>
-            ⭐ {ratingText} • {p.reviewCount} reviews
+          <div className='text-sm text-zinc-700 mb-4 flex items-center gap-2'>
+            <span className='inline-flex items-center gap-1'>
+              <Image
+                src='/icons/star-rating.svg'
+                alt='rating'
+                width={14}
+                height={14}
+                className='inline-block'
+              />
+              {ratingText}
+            </span>
+            <span>• {p.reviewCount} reviews</span>
           </div>
 
           {Array.isArray((p as unknown as { reviews?: unknown[] }).reviews) &&
@@ -334,8 +353,15 @@ export default function ProductDetailPage() {
                     {rp.title}
                   </h3>
                   <p className='font-semibold'>{formatIDR(rp.price)}</p>
-                  <p className='text-sm text-zinc-600 flex items-center'>
-                    ⭐ {(rp.rating ?? 0).toFixed(1)}
+                  <p className='text-sm text-zinc-600 flex items-center gap-1'>
+                    <Image
+                      src='/icons/star-rating.svg'
+                      alt='rating'
+                      width={14}
+                      height={14}
+                      className='inline-block'
+                    />
+                    {(rp.rating ?? 0).toFixed(1)}
                   </p>
                 </Link>
               ))}
