@@ -145,7 +145,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className='inline-flex items-center gap-2 rounded-2xl border border-zinc-300 px-2.5 py-1.5 hover:bg-zinc-50'
+                    className='inline-flex items-center gap-2 rounded-2xl cursor-pointer border border-zinc-300 px-2.5 py-1.5 hover:bg-zinc-50'
                     aria-label='Account menu'
                   >
                     <Avatar className='h-7 w-7'>
@@ -171,7 +171,7 @@ export default function Header() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild className='cursor-pointer'>
-                    <Link href='/buyer'>Profile</Link>
+                    <Link href='/me'>Profile</Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild className='cursor-pointer'>
                     <Link href='/orders'>My Orders</Link>

@@ -2,10 +2,11 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, token } from '@/lib/api';
+import { api } from '@/lib/api';
 
+// ==== Types dari API kamu ====
 export type CartItem = {
-  id: number; // cart item id (opsional)
+  id: number; // itemId (untuk PATCH/DELETE)
   productId: number;
   title?: string;
   price?: number;
@@ -14,8 +15,9 @@ export type CartItem = {
 };
 
 export type Cart = {
+  cartId: number;
   items: CartItem[];
-  // backend kamu bisa kirim field lain (subtotal, etc.)
+  grandTotal: number; // hitung total dari API
 };
 
 type ApiResp<T> = { success: boolean; message: string; data: T };
@@ -24,12 +26,10 @@ const qk = {
   cart: ['cart'] as const,
 };
 
-/** GET /api/cart */
+// ==== GET /api/cart ====
 export function useCart() {
-  const enabled = !!token.get();
   return useQuery({
     queryKey: qk.cart,
-    enabled,
     queryFn: async (): Promise<Cart> => {
       const res = await api<ApiResp<Cart>>('/api/cart', {
         method: 'GET',
@@ -41,56 +41,78 @@ export function useCart() {
   });
 }
 
-/** Hitung total qty dari cart */
+// Hitung total qty utk badge header
 export function useCartCount() {
   const { data } = useCart();
-  const total =
-    data?.items?.reduce((sum, it) => sum + (Number(it.qty) || 0), 0) ?? 0;
-  return total;
+  return data?.items?.reduce((s, it) => s + (it.qty || 0), 0) ?? 0;
 }
 
-/** POST /api/cart/add  { productId, qty } + optimistic update */
+// ==== POST /api/cart/items ====
 export function useAddToCart() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: async (payload: { productId: number; qty: number }) => {
-      const res = await api<ApiResp<Cart>>('/api/cart/add', {
+      const res = await api<ApiResp<Cart>>('/api/cart/items', {
         method: 'POST',
         data: payload,
         useAuth: true,
       });
-      return res.data; // backend bisa mengembalikan cart terbaru
-    },
-    onMutate: async ({ productId, qty }) => {
-      await qc.cancelQueries({ queryKey: qk.cart });
-
-      const prev = qc.getQueryData<Cart>(qk.cart);
-
-      // optimistic: tambah qty pada item jika sudah ada, kalau tidak, buat baru minimal
-      const next: Cart = {
-        items: [...(prev?.items ?? [])],
-      };
-      const idx = next.items.findIndex((i) => i.productId === productId);
-      if (idx >= 0)
-        next.items[idx] = {
-          ...next.items[idx],
-          qty: next.items[idx].qty + qty,
-        };
-      else next.items.push({ id: Date.now(), productId, qty });
-
-      qc.setQueryData(qk.cart, next);
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) qc.setQueryData(qk.cart, ctx.prev);
+      return res.data; // cart terbaru dari server
     },
     onSuccess: (data) => {
-      // kalau BE kirim cart terbaru, sync-kan
-      if (data) qc.setQueryData(qk.cart, data);
+      qc.setQueryData(qk.cart, data);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: qk.cart });
     },
+  });
+}
+
+// ==== PATCH /api/cart/items/{itemId} ====
+export function useUpdateCartItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { itemId: number; qty: number }) => {
+      const res = await api<ApiResp<Cart>>(`/api/cart/items/${args.itemId}`, {
+        method: 'PATCH',
+        data: { qty: args.qty },
+        useAuth: true,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => qc.setQueryData(qk.cart, data),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.cart }),
+  });
+}
+
+// ==== DELETE /api/cart/items/{itemId} ====
+export function useRemoveCartItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (itemId: number) => {
+      const res = await api<ApiResp<Cart>>(`/api/cart/items/${itemId}`, {
+        method: 'DELETE',
+        useAuth: true,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => qc.setQueryData(qk.cart, data),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.cart }),
+  });
+}
+
+// ==== DELETE /api/cart ====
+export function useClearCart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await api<ApiResp<Cart>>('/api/cart', {
+        method: 'DELETE',
+        useAuth: true,
+      });
+      return res.data;
+    },
+    onSuccess: (data) => qc.setQueryData(qk.cart, data),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.cart }),
   });
 }
