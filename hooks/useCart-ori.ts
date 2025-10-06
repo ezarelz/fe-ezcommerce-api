@@ -1,4 +1,3 @@
-// hooks/useCart.ts
 'use client';
 
 import {
@@ -20,17 +19,15 @@ import type {
 /** ==== Bentuk respons mentah dari BE ==== */
 type RawCartItem = {
   id: number;
+  productId: number;
+  title?: string;
+  price?: number;
+  image?: string;
   qty: number;
-  product: {
-    id: number;
-    title: string;
-    price: number;
-    images: string[];
-  };
 };
 
 type RawCart = {
-  cartId?: number;
+  cartId: number;
   items: RawCartItem[];
   grandTotal?: number;
 };
@@ -43,10 +40,10 @@ function normalizeCart(raw: RawCart): CartResponse {
     id: String(it.id),
     quantity: Number(it.qty ?? 1),
     product: {
-      id: it.product.id,
-      title: it.product.title,
-      price: Number(it.product.price ?? 0),
-      images: it.product.images ?? [],
+      id: it.productId,
+      title: it.title,
+      price: Number(it.price ?? 0),
+      images: it.image ? [it.image] : [],
     },
   }));
   return { items };
@@ -92,6 +89,7 @@ export function useAddToCart() {
       await qc.cancelQueries({ queryKey: QK.cart() });
       const prev = qc.getQueryData<CartResponse>(QK.cart());
 
+      // Optimistic update
       if (prev) {
         const exists = prev.items.find(
           (it) => it.product.id === payload.productId

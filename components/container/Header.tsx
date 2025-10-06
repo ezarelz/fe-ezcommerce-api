@@ -1,3 +1,4 @@
+// components/container/Header.tsx
 'use client';
 
 import Link from 'next/link';
@@ -16,12 +17,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import LogoutConfirm from './account/LogoutConfirm';
 import { useCartCount } from '@/hooks/useCart';
+import SearchBar from '@/components/container/Searchbar'; // ✅ panggil komponen SearchBar
 
 export default function Header() {
   const [open, setOpen] = useState(false);
-  const cartCount = useCartCount(); // dari Hooks useCart.ts
+  const cartCount = useCartCount();
   const { data: me } = useMe();
-  // const logout = useLogout();
 
   const initials =
     me?.name
@@ -62,19 +63,8 @@ export default function Header() {
             <span className='hidden text-sm md:inline'>Catalog</span>
           </Link>
 
-          <div className='relative flex h-10 flex-1 items-center gap-1 rounded-xl border border-zinc-300 px-4 py-2 lg:h-11'>
-            <Image
-              src='/icons/search-icon.svg'
-              width={20}
-              height={20}
-              alt='Search'
-            />
-            <input
-              type='search'
-              placeholder='Search'
-              className='w-full text-sm text-zinc-700 outline-none placeholder:text-zinc-500'
-            />
-          </div>
+          {/* ✅ Ganti input lama dengan komponen SearchBar */}
+          <SearchBar />
         </div>
 
         {/* Cart + Auth */}

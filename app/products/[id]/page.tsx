@@ -1,5 +1,5 @@
 'use client';
-//update
+
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -103,7 +103,10 @@ export default function ProductDetailPage() {
       router.push(`/login?return_to=/products/${id}`);
       return;
     }
-    await addToCart.mutateAsync({ productId: Number(p.id), qty });
+    await addToCart.mutateAsync({
+      productId: Number(p.id),
+      quantity: qty,
+    });
   };
 
   return (

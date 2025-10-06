@@ -3,11 +3,21 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useCart, useUpdateCartItem, useRemoveCartItem } from '@/hooks/useCart';
-import { Button } from '@/components/ui/button';
+import { useState, useMemo, useCallback } from 'react';
 import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
-import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { useCartHydrated } from '@/hooks/useCartHydrated';
+import { useUpdateCartItem, useRemoveCartItem } from '@/hooks/useCart';
+import type { CartItem } from '@/types/cart';
+import {
+  getProductTitle,
+  getProductImage,
+  getShopName,
+  getShopSlug,
+  calcCartTotal,
+  calcLineTotal,
+} from '@/types/cart';
 
 const FALLBACK_IMG =
   'data:image/svg+xml;utf8,' +
@@ -21,49 +31,97 @@ const FALLBACK_IMG =
     </svg>`
   );
 
+function formatIDR(n: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
 export default function CartPage() {
-  const { data, isLoading } = useCart();
-  const updateItem = useUpdateCartItem();
+  const { data, isLoading, isError } = useCartHydrated();
+  const updateQty = useUpdateCartItem();
   const removeItem = useRemoveCartItem();
 
-  // untuk disable tombol per-item saat request berjalan
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<string | number | null>(null);
 
-  const items = data?.items ?? [];
-  const total = data?.grandTotal ?? 0;
+  // Stabilkan items & total
+  const items: CartItem[] = useMemo(() => data?.items ?? [], [data?.items]);
+  const total = useMemo(() => calcCartTotal(items), [items]);
 
-  async function inc(it: { id: number; qty: number }) {
-    if (!it?.id) return;
-    setBusyId(it.id);
-    try {
-      await updateItem.mutateAsync({ itemId: it.id, qty: it.qty + 1 });
-    } finally {
-      setBusyId(null);
-    }
-  }
-  async function dec(it: { id: number; qty: number }) {
-    if (!it?.id) return;
-    const next = (it.qty || 1) - 1;
-    setBusyId(it.id);
-    try {
-      if (next <= 0) {
-        await removeItem.mutateAsync(it.id);
-      } else {
-        await updateItem.mutateAsync({ itemId: it.id, qty: next });
+  // Precompute nilai turunan per-row (mengurangi kerja di render loop)
+  const rows = useMemo(
+    () =>
+      items.map((it) => {
+        const title = getProductTitle(it.product);
+        const img = getProductImage(it.product) ?? FALLBACK_IMG;
+        const shopName = getShopName(it.product);
+        const shopSlug = getShopSlug(it.product);
+        const lineTotal = calcLineTotal(it);
+        const unitPrice = lineTotal / Math.max(1, it.quantity ?? 1);
+        return {
+          item: it,
+          id: String(it.id),
+          qty: it.quantity,
+          title,
+          img,
+          shopName,
+          shopSlug,
+          lineTotal,
+          unitPrice,
+        };
+      }),
+    [items]
+  );
+
+  // Stabilkan handler supaya referensi tidak berubah-ubah
+  const inc = useCallback(
+    async (id: string | number, qty: number) => {
+      setBusyId(id);
+      try {
+        await updateQty.mutateAsync({
+          cartItemId: String(id),
+          quantity: (qty ?? 1) + 1,
+        });
+      } finally {
+        setBusyId(null);
       }
-    } finally {
-      setBusyId(null);
-    }
-  }
-  async function del(itId: number) {
-    if (!itId) return;
-    setBusyId(itId);
-    try {
-      await removeItem.mutateAsync(itId);
-    } finally {
-      setBusyId(null);
-    }
-  }
+    },
+    [updateQty]
+  );
+
+  const dec = useCallback(
+    async (id: string | number, qty: number) => {
+      setBusyId(id);
+      const next = (qty ?? 1) - 1;
+      try {
+        if (next <= 0) {
+          await removeItem.mutateAsync({ cartItemId: String(id) });
+        } else {
+          await updateQty.mutateAsync({
+            cartItemId: String(id),
+            quantity: next,
+          });
+        }
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [removeItem, updateQty]
+  );
+
+  const del = useCallback(
+    async (id: string | number) => {
+      setBusyId(id);
+      try {
+        await removeItem.mutateAsync({ cartItemId: String(id) });
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [removeItem]
+  );
 
   return (
     <>
@@ -73,58 +131,65 @@ export default function CartPage() {
 
         {isLoading ? (
           <p>Loading cart…</p>
+        ) : isError ? (
+          <p className='text-red-600'>Gagal memuat keranjang.</p>
         ) : items.length === 0 ? (
           <EmptyCart />
         ) : (
           <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
-            {/* list */}
             <div className='lg:col-span-2 space-y-4'>
-              {items.map((it) => {
+              {rows.map((row) => {
                 const isBusy =
-                  busyId === it.id ||
-                  updateItem.isPending ||
+                  busyId === row.id ||
+                  updateQty.isPending ||
                   removeItem.isPending;
 
                 return (
-                  <div key={it.id} className='rounded-xl border p-4'>
-                    {/* header row brand & price kanan */}
+                  <div key={row.id} className='rounded-xl border p-4'>
+                    {/* shop & line total */}
                     <div className='mb-3 flex items-center justify-between text-sm text-zinc-700'>
                       <div className='flex items-center gap-2'>
                         <span className='inline-block h-4 w-4 rounded-full bg-zinc-900' />
-                        <span className='font-medium'>Toko</span>
+                        {row.shopSlug ? (
+                          <Link
+                            href={`/shops/${row.shopSlug}`}
+                            className='font-medium hover:underline'
+                          >
+                            {row.shopName}
+                          </Link>
+                        ) : (
+                          <span className='font-medium'>{row.shopName}</span>
+                        )}
                       </div>
                       <div className='font-semibold'>
-                        {formatIDR(Number(it.price || 0) * Number(it.qty || 0))}
+                        {formatIDR(row.lineTotal)}
                       </div>
                     </div>
 
-                    {/* content */}
+                    {/* product row */}
                     <div className='flex items-center gap-4'>
                       <div className='relative w-20 h-20 rounded-md overflow-hidden bg-zinc-100'>
                         <Image
-                          src={it.image || FALLBACK_IMG}
-                          alt={it.title || 'Product'}
+                          src={row.img}
+                          alt={row.title}
                           fill
                           className='object-cover'
                         />
                       </div>
 
                       <div className='flex-1 min-w-0'>
-                        <div className='font-medium truncate'>
-                          {it.title || 'Product'}
-                        </div>
+                        <div className='font-medium truncate'>{row.title}</div>
                         <div className='text-xs text-zinc-600 mt-0.5'>
-                          SKU • Apparel
+                          {formatIDR(row.unitPrice)}
                         </div>
                       </div>
 
-                      {/* actions: trash + stepper */}
+                      {/* remove */}
                       <button
-                        className='inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-zinc-50 cursor-pointer'
-                        aria-label='remove'
+                        className='inline-flex h-9 w-9 items-center justify-center rounded-md border cursor-pointer hover:bg-zinc-50'
                         disabled={isBusy}
-                        onClick={() => del(it.id)}
-                        title='Remove item'
+                        onClick={() => del(row.id)}
+                        aria-label='remove'
                       >
                         <Image
                           src='/icons/trash-ico.svg'
@@ -134,23 +199,24 @@ export default function CartPage() {
                         />
                       </button>
 
+                      {/* qty stepper */}
                       <div className='inline-flex items-center rounded-lg border'>
                         <button
                           className='px-3 py-2 cursor-pointer disabled:opacity-50'
+                          disabled={isBusy || (row.qty ?? 1) <= 1}
+                          onClick={() => dec(row.id, row.qty)}
                           aria-label='decrease'
-                          disabled={isBusy || (it.qty ?? 1) <= 1}
-                          onClick={() => dec({ id: it.id, qty: it.qty })}
                         >
                           −
                         </button>
                         <div className='px-4 py-2 min-w-10 text-center text-sm'>
-                          {Number(it.qty) || 0}
+                          {row.qty}
                         </div>
                         <button
                           className='px-3 py-2 cursor-pointer disabled:opacity-50'
-                          aria-label='increase'
                           disabled={isBusy}
-                          onClick={() => inc({ id: it.id, qty: it.qty })}
+                          onClick={() => inc(row.id, row.qty)}
+                          aria-label='increase'
                         >
                           +
                         </button>
@@ -168,7 +234,9 @@ export default function CartPage() {
                 <span>Total</span>
                 <span className='font-semibold'>{formatIDR(total)}</span>
               </div>
-              <Button className='w-full'>Checkout</Button>
+              <Link href='/checkout'>
+                <Button className='w-full'>Checkout</Button>
+              </Link>
             </aside>
           </div>
         )}
@@ -197,12 +265,4 @@ function EmptyCart() {
       </Link>
     </div>
   );
-}
-
-function formatIDR(n: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(n);
 }

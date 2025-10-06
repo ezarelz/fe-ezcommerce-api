@@ -11,8 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { ApiProduct, ProductCardVM } from '@/types/products';
 
 // ====== CONFIG: pilih ID yang ingin ditampilkan di landing ======
-const START_ID = 1;
-const END_ID = 10; // ubah angka ini untuk range lain
+const START_ID = 12;
+const END_ID = 27; // ubah angka ini untuk range lain
 const SELECTED_IDS: number[] = Array.from(
   { length: END_ID - START_ID + 1 },
   (_, i) => START_ID + i

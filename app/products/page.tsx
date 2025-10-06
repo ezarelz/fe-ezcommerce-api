@@ -10,7 +10,7 @@ import type { ApiProduct, ProductCardVM } from '@/types/products';
 import { toProductCardVM } from '@/lib/transform';
 import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
-//update
+
 function CardSkeleton() {
   return (
     <div className='rounded-xl border border-zinc-200 bg-white shadow-sm'>
