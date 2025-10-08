@@ -3,12 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, token } from '@/lib/api';
 
-export type Role = 'buyer' | 'seller' | 'admin';
+export type Role = boolean | 'buyer' | 'seller' | 'admin';
 export type Me = {
   id: string;
   name: string;
   email: string;
-  role?: Role;
+  isActive?: Role;
   avatarUrl?: string;
   stats?: { totalOrders: number; completedItems: number; hasShop: boolean };
 };
@@ -34,6 +34,26 @@ export function useMe() {
   });
 }
 
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: {
+      name?: string;
+      phone?: string;
+      avatarUrl?: string;
+    }) => {
+      const res = await api<ApiResp<Me>>('/api/me', {
+        method: 'PATCH',
+        useAuth: true,
+        data,
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
 /** POST /api/auth/login — simpan token + refresh /me */
 export function useLogin() {
   const qc = useQueryClient();

@@ -9,10 +9,13 @@ import Footer from '@/components/container/Footer';
 import { useProductsInfinite } from '@/hooks/useProducts';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ApiProduct, ProductCardVM } from '@/types/products';
+import { useEffect } from 'react';
+import { useMe } from '@/hooks/useSession';
+import { useRouter } from 'next/navigation';
 
 // ====== CONFIG: pilih ID yang ingin ditampilkan di landing ======
-const START_ID = 12;
-const END_ID = 27; // ubah angka ini untuk range lain
+const START_ID = 11;
+const END_ID = 39; // ubah angka ini untuk range lain
 const SELECTED_IDS: number[] = Array.from(
   { length: END_ID - START_ID + 1 },
   (_, i) => START_ID + i
@@ -37,7 +40,7 @@ function ProductCardSkeleton() {
   );
 }
 
-// ====== mapper ApiProduct -> ProductCardVM (tanpa any) ======
+// ====== mapper ApiProduct -> ProductCardVM ======
 function toCardVM(p: ApiProduct): ProductCardVM {
   return {
     id: p.id,
@@ -50,8 +53,17 @@ function toCardVM(p: ApiProduct): ProductCardVM {
 }
 
 export default function HomePage() {
-  // gunakan infinite agar konsisten dengan file kamu sebelumnya
-  // kita minta langsung ID yang dipilih (jika BE support ?ids=)
+  const router = useRouter(); // ✅
+  const { data: me, isLoading: meLoading } = useMe(); // ✅
+
+  // ✅ Redirect hanya untuk BUYER (sudah login tapi belum punya shop)
+  useEffect(() => {
+    if (meLoading) return;
+    if (me && me.isActive) {
+      router.replace('/products');
+    }
+  }, [meLoading, me, router]);
+
   const {
     data,
     isLoading,
@@ -61,6 +73,9 @@ export default function HomePage() {
     hasNextPage,
     isFetchingNextPage,
   } = useProductsInfinite(SELECTED_IDS.length, { ids: SELECTED_IDS });
+
+  // gunakan infinite agar konsisten dengan file kamu sebelumnya
+  // kita minta langsung ID yang dipilih (jika BE support ?ids=)
 
   // data?.pages adalah ApiProduct[] per halaman -> flatten rapi
   const apiProducts: ApiProduct[] = data?.pages.flatMap((page) => page) ?? [];

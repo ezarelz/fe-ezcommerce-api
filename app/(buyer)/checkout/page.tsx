@@ -1,10 +1,11 @@
 // app/checkout/page.tsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SubmitHandler, Resolver, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
@@ -45,11 +46,11 @@ type ProductDetail = {
   images?: string[];
   imageUrl?: string | null;
   image?: string | null;
-  shop?: ProductShop; // <-- detail produk mengandung shop
+  shop?: ProductShop;
 };
 
 type RawCartItem = {
-  id: number;
+  id: number; // ← ini ID CART ITEM (yang akan dipakai untuk selectedItemIds)
   qty: number;
   product: {
     id: number;
@@ -59,7 +60,6 @@ type RawCartItem = {
     imageUrl?: string | null;
     image?: string | null;
     images?: string[] | null;
-    // NOTE: pada /api/cart biasanya TIDAK ada shop
   };
 };
 
@@ -70,7 +70,7 @@ type RawCart = {
 };
 
 type CartItem = {
-  id: number;
+  id: number; // ← id cart item
   qty: number;
   product: {
     id: number;
@@ -80,40 +80,32 @@ type CartItem = {
     shop?: ProductShop;
   };
 };
-/* ---------- Enrichment helpers ---------- */
 
-// cache ringan supaya tidak refetch product yang sama berkali-kali
+/* ---------- Enrichment helpers ---------- */
 const shopCache = new Map<number, ProductShop | undefined>();
 
 async function fetchProductShop(
   productId: number
 ): Promise<ProductShop | undefined> {
   if (shopCache.has(productId)) return shopCache.get(productId);
-
   const res = await api<ApiResp<ProductDetail>>(`/api/products/${productId}`, {
     method: 'GET',
-    useAuth: true, // pakai auth sama
+    useAuth: true,
   });
-
   const shop = res.data?.shop;
   shopCache.set(productId, shop);
   return shop;
 }
 
 async function enrichCartWithShops(items: CartItem[]): Promise<CartItem[]> {
-  // kumpulkan productId unik yang belum ada di cache
   const ids = Array.from(
     new Set(items.map((it) => it.product.id).filter((id) => !shopCache.has(id)))
   );
-
   if (ids.length > 0) {
-    // fetch paralel (kalau error, biarkan undefined → nanti fallback)
     await Promise.all(
       ids.map((id) => fetchProductShop(id).catch(() => undefined))
     );
   }
-
-  // isi shop ke tiap item dari cache
   return items.map((it) => {
     const filledShop = it.product.shop ?? shopCache.get(it.product.id);
     return filledShop
@@ -139,40 +131,46 @@ async function fetchCart(): Promise<CartItem[]> {
       (Array.isArray(p.images) ? p.images[0] ?? null : null);
 
     return {
-      id: it.id,
+      id: it.id, // penting: simpan id CART ITEM
       qty: it.qty,
       product: {
         id: p.id,
         name,
         price: Number(p.price ?? 0),
         imageUrl: img ?? null,
-        // shop akan diisi oleh enrichCartWithShops()
       },
     };
   });
-  // isi field shop yang kosong dengan memanggil /api/products/{id}
+
   return enrichCartWithShops(normalized);
 }
 
-/* Checkout payload */
-interface CheckoutRequest {
+/* ====== Checkout endpoint V4 ====== */
+type CheckoutReqV4 = {
   address: {
     name: string;
     phone: string;
     city: string;
-    postal: string;
+    postalCode: string;
     address: string;
   };
-  shipping: ShippingCode;
-  paymentMethod: PaymentCode;
-}
-interface CheckoutResponse {
-  orderId: number;
-  status: 'PAID' | 'PENDING';
-}
+  shippingMethod: string;
+  selectedItemIds: number[]; // ← array ID cart item
+};
+type CheckoutRespV4 = unknown;
+
+// Label yang diharapkan BE (ikuti Swagger)
+const SHIPPING_METHOD_LABEL: Record<ShippingCode, string> = {
+  JNT: 'JNT EXPRESS',
+  JNE: 'JNE REG',
+};
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const [cart, setCart] = useState<CartItem[] | null>(null);
+
+  // ref untuk memastikan tombol "Pay Now" kanan submit ke form utama
+  const mainFormRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -184,7 +182,6 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  // Penting: generic sama persis dengan schema agar resolver tidak error
   const {
     register,
     handleSubmit,
@@ -221,28 +218,35 @@ export default function CheckoutPage() {
 
   const onSubmit: SubmitHandler<CheckoutFormValues> = async (values) => {
     if (!values.shipping) return;
+    if (!cart || cart.length === 0) return;
 
-    const payload: CheckoutRequest = {
-      address: {
-        name: values.name,
-        phone: values.phone,
-        city: values.city,
-        postal: values.postal,
-        address: values.address,
-      },
-      shipping: values.shipping,
-      paymentMethod: values.payment,
-    };
+    try {
+      // ambil SEMUA id cart item (kalau nanti ada UI checkbox, ganti di sini)
+      const selectedItemIds = cart.map((it) => it.id);
 
-    const res = await api<ApiResp<CheckoutResponse>>('/api/orders/checkout', {
-      method: 'POST',
-      data: payload,
-      useAuth: true,
-    });
+      const payload: CheckoutReqV4 = {
+        address: {
+          name: values.name.trim(),
+          phone: values.phone.trim(),
+          city: values.city.trim(),
+          postalCode: String(values.postal).trim(),
+          address: values.address.trim(),
+        },
+        shippingMethod: SHIPPING_METHOD_LABEL[values.shipping],
+        selectedItemIds,
+      };
 
-    alert(
-      `Order #${res.data.orderId} ${res.data.status}. Total: ${rp(grandTotal)}`
-    );
+      await api<ApiResp<CheckoutRespV4>>('/api/orders/checkout', {
+        method: 'POST',
+        data: payload, // Axios → data
+        useAuth: true,
+      });
+
+      router.push('/checkout/success');
+    } catch (e) {
+      console.error('Checkout failed:', e);
+      router.push('/checkout/failure');
+    }
   };
 
   const shopName =
@@ -260,7 +264,11 @@ export default function CheckoutPage() {
 
           {/* LEFT */}
           <section className='space-y-6'>
-            <form onSubmit={handleSubmit(onSubmit)} className='space-y-6'>
+            <form
+              ref={mainFormRef}
+              onSubmit={handleSubmit(onSubmit)}
+              className='space-y-6'
+            >
               {/* Address */}
               <div className='rounded-2xl border border-zinc-200 bg-white p-4 md:p-5'>
                 <div className='mb-3 text-sm font-semibold text-zinc-900'>
@@ -386,7 +394,7 @@ export default function CheckoutPage() {
                 {/* divider */}
                 <div className='my-4 h-px w-full bg-zinc-200' />
 
-                {/* Shipping Method - SELECT biasa */}
+                {/* Shipping Method */}
                 <div className='mb-2 text-sm font-semibold text-zinc-900'>
                   Shipping Method
                 </div>
@@ -537,12 +545,11 @@ export default function CheckoutPage() {
                 </span>
               </div>
 
+              {/* tombol submit sisi kanan memicu form utama via ref */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  (
-                    document.querySelector('form') as HTMLFormElement | null
-                  )?.requestSubmit();
+                  mainFormRef.current?.requestSubmit();
                 }}
               >
                 <button

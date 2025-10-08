@@ -8,7 +8,7 @@ import axios, {
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL!;
 
-/* =============== Token helper =============== */
+// =============== Token helper ===============
 export const TOKEN_KEY = 'token';
 export const token = {
   get: () =>
@@ -19,23 +19,20 @@ export const token = {
     typeof window !== 'undefined' && localStorage.removeItem(TOKEN_KEY),
 };
 
-/* =============== Axios instance =============== */
-// NOTE: jangan set Content-Type di level instance (bisa ganggu FormData)
-export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE,
-  // headers: { 'Content-Type': 'application/json' }, // ← HAPUS
-});
-
-/** Request config dengan flag useAuth */
+// =============== Axios instance ===============
 export type ApiInit = AxiosRequestConfig & {
   useAuth?: boolean;
-};
+  body?: FormData | string | null;
+}; // <-- rename flag
 
-/* Inject Bearer token hanya jika useAuth = true
-   & bersihkan Content-Type kalau data = FormData (biar Axios set boundary) */
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: API_BASE,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// Inject Bearer token hanya jika useAuth = true
 apiClient.interceptors.request.use((config) => {
   const init = config as ApiInit;
-
   if (init.useAuth) {
     const t = token.get();
     if (t) {
@@ -49,61 +46,25 @@ apiClient.interceptors.request.use((config) => {
       }
     }
   }
-
-  // Jika kirim JSON (string / object), set Content-Type json
-  const isFormData =
-    typeof config.data !== 'undefined' &&
-    typeof FormData !== 'undefined' &&
-    config.data instanceof FormData;
-
-  if (!isFormData) {
-    // untuk JSON (string/object)
-    if (!config.headers) config.headers = new AxiosHeaders();
-    if (config.headers instanceof AxiosHeaders) {
-      if (!config.headers.has('Content-Type')) {
-        config.headers.set('Content-Type', 'application/json');
-      }
-    } else {
-      (config.headers as Record<string, string>)['Content-Type'] ??=
-        'application/json';
-    }
-  } else {
-    // biarkan axios set boundary untuk FormData
-    if (config.headers instanceof AxiosHeaders) {
-      config.headers.delete('Content-Type');
-    } else if (config.headers) {
-      delete (config.headers as Record<string, string>)['Content-Type'];
-    }
-  }
-
   return config;
 });
 
-/* =============== Generic request helper =============== */
+// =============== Generic request helper ===============
 export async function api<T>(path: string, init?: ApiInit): Promise<T> {
   try {
-    // IMPORTANT: Axios memakai "data", BUKAN "body"
-    const res = await apiClient.request<T>({
-      url: path,
-      ...init,
-    });
+    const res = await apiClient.request<T>({ url: path, ...init });
     return res.data;
   } catch (err) {
     const e = err as AxiosError<{ message?: string }>;
-    const status = e.response?.status;
     const msg =
       e.response?.data?.message ||
       e.message ||
-      `Request failed${status ? `: ${status}` : ''}`;
-    // log detail untuk debugging
-    if (e.response) {
-      console.error('API ERROR', status, e.response.data);
-    }
+      `Request failed${e.response ? `: ${e.response.status}` : ''}`;
     throw new Error(msg);
   }
 }
 
-/* =============== Utils kecil =============== */
+// =============== Utils ===============
 function qs(params?: Record<string, string | number | undefined>): string {
   if (!params) return '';
   const usp = new URLSearchParams();
@@ -114,7 +75,7 @@ function qs(params?: Record<string, string | number | undefined>): string {
   return s ? `?${s}` : '';
 }
 
-/* =============== (Opsional) product helpers =============== */
+// =============== E-commerce endpoints (opsional) ===============
 import type {
   ApiProduct,
   ApiProductsResponse,
@@ -122,6 +83,7 @@ import type {
   ApiProductDetail,
 } from '@/types/products';
 
+/** GET /api/products -> flatten ke ApiProduct[] */
 export async function getProducts(args?: {
   limit?: number;
   cursor?: string | number | null;
@@ -142,10 +104,12 @@ export async function getProducts(args?: {
   const resp = await api<ApiProductsResponse>(`/api/products${query}`, {
     method: 'GET',
   });
+
   if (!resp.success) throw new Error(resp.message);
   return resp.data.products;
 }
 
+/** GET /api/products/{id} -> ApiProductDetail */
 export async function getProductById(
   id: number | string
 ): Promise<ApiProductDetail> {

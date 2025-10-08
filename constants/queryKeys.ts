@@ -5,4 +5,5 @@ export const QK = {
   cart: () => ['cart'] as const,
   me: () => ['me'] as const,
   orders: () => ['orders'] as const,
+  sellerShop: () => ['seller', 'shop'] as const,
 };

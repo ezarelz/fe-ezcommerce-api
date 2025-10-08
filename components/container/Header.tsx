@@ -17,13 +17,15 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import LogoutConfirm from './account/LogoutConfirm';
 import { useCartCount } from '@/hooks/useCart';
-import SearchBar from '@/components/container/Searchbar'; // ✅ panggil komponen SearchBar
+import SearchBar from '@/components/container/Searchbar';
 
 export default function Header() {
   const [open, setOpen] = useState(false);
   const cartCount = useCartCount();
   const { data: me } = useMe();
 
+  // ✅ ganti deteksi seller pakai keberadaan shop (hasil aktivasi dari BE)
+  const isSeller = !!me?.isActive;
   const initials =
     me?.name
       ?.split(' ')
@@ -62,8 +64,6 @@ export default function Header() {
             />
             <span className='hidden text-sm md:inline'>Catalog</span>
           </Link>
-
-          {/* ✅ Ganti input lama dengan komponen SearchBar */}
           <SearchBar />
         </div>
 
@@ -102,9 +102,9 @@ export default function Header() {
           {/* ===== AFTER LOGIN ===== */}
           {me && (
             <div className='hidden items-center gap-2 lg:flex'>
-              {/* Buyer → Open Store, Seller → Seller Dashboard */}
-              {me.role !== 'seller' ? (
-                <Link href='/seller/activate'>
+              {/* ✅ Buyer → Open Store (ke dashboard, BE sudah aktifkan) ; Seller → Dashboard */}
+              {isSeller ? (
+                <Link href='/seller/dashboard'>
                   <Button variant='outline' className='rounded-2xl'>
                     <Image
                       src='/icons/store-ico.svg'
@@ -166,15 +166,18 @@ export default function Header() {
                   <DropdownMenuItem asChild className='cursor-pointer'>
                     <Link href='/orders'>My Orders</Link>
                   </DropdownMenuItem>
-                  {me.role !== 'seller' ? (
+
+                  {/* ✅ dropdown juga pakai isSeller */}
+                  {!isSeller ? (
                     <DropdownMenuItem asChild className='cursor-pointer'>
-                      <Link href='/seller/activate'>Open Store</Link>
+                      <Link href='/seller/dashboard'>Seller Dashboard</Link>
                     </DropdownMenuItem>
                   ) : (
                     <DropdownMenuItem asChild className='cursor-pointer'>
                       <Link href='/seller/dashboard'>Seller Dashboard</Link>
                     </DropdownMenuItem>
                   )}
+
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <LogoutConfirm redirectTo='/'>
@@ -229,14 +232,16 @@ export default function Header() {
                   </Avatar>
                   <div className='text-sm font-medium'>{me.name}</div>
                 </div>
-                <Link href='/buyer' className='py-2'>
+                <Link href='/me' className='py-2'>
                   Profile
                 </Link>
                 <Link href='/orders' className='py-2'>
                   My Orders
                 </Link>
-                {me.role !== 'seller' ? (
-                  <Link href='/seller/activate' className='py-2'>
+
+                {/* ✅ mobile juga diarahkan ke dashboard */}
+                {!isSeller ? (
+                  <Link href='/seller/dashboard' className='py-2'>
                     Open Store
                   </Link>
                 ) : (
@@ -244,6 +249,7 @@ export default function Header() {
                     Seller Dashboard
                   </Link>
                 )}
+
                 <LogoutConfirm redirectTo='/'>
                   <button className='cursor-pointer py-2 text-left text-red-600'>
                     Logout
