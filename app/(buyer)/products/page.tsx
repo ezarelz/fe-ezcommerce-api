@@ -1,4 +1,4 @@
-// app/products/page.tsx
+// app/(buyer)/products/page.tsx
 'use client';
 
 import Image from 'next/image';
@@ -11,6 +11,32 @@ import { toProductCardVM } from '@/lib/transform';
 import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
 
+/* =========================
+   Helper: fallback image URL
+========================= */
+function safeImageSrc(url?: string): string {
+  if (!url || url.trim() === '' || url.trim().toLowerCase() === 'string') {
+    return '/placeholder.png';
+  }
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:')
+  ) {
+    return url;
+  }
+  if (url.startsWith('/')) return url;
+  const base =
+    process.env.NEXT_PUBLIC_CDN_BASE ||
+    process.env.NEXT_PUBLIC_API_ORIGIN ||
+    '';
+  const normalized = url.replace(/^\.?\//, '');
+  return base ? `${base}/${normalized}` : `/${normalized}`;
+}
+
+/* =========================
+   Skeleton Card
+========================= */
 function CardSkeleton() {
   return (
     <div className='rounded-xl border border-zinc-200 bg-white shadow-sm'>
@@ -25,6 +51,9 @@ function CardSkeleton() {
   );
 }
 
+/* =========================
+   Page Component
+========================= */
 export default function ProductsPage() {
   const {
     data,
@@ -36,6 +65,7 @@ export default function ProductsPage() {
     isFetchingNextPage,
   } = useProductsInfinite(20);
 
+  // flatten data
   const all: ApiProduct[] = data?.pages.flatMap((arr) => arr) ?? [];
   const cards: ProductCardVM[] = all.map(toProductCardVM);
 
@@ -45,6 +75,7 @@ export default function ProductsPage() {
       <main className='max-w-6xl mx-auto px-3 sm:px-4 py-8 sm:py-12'>
         <h1 className='text-2xl sm:text-3xl font-bold mb-6'>All Products</h1>
 
+        {/* ========== Loading ========== */}
         {isLoading && (
           <div className='grid grid-cols-2 gap-4 sm:gap-6 max-[360px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-4'>
             {Array.from({ length: 8 }).map((_, i) => (
@@ -53,12 +84,14 @@ export default function ProductsPage() {
           </div>
         )}
 
+        {/* ========== Error ========== */}
         {isError && (
           <p className='text-sm text-red-600'>
             Failed to load products: {error.message}
           </p>
         )}
 
+        {/* ========== Product list ========== */}
         {!isLoading && !isError && (
           <>
             {cards.length === 0 ? (
@@ -73,7 +106,7 @@ export default function ProductsPage() {
                   >
                     <div className='relative w-full h-44 md:h-48'>
                       <Image
-                        src={c.imageUrl ?? '/placeholder.png'}
+                        src={safeImageSrc(c.imageUrl)}
                         alt={c.name}
                         fill
                         className='object-cover'
@@ -93,6 +126,8 @@ export default function ProductsPage() {
                     </div>
                   </Link>
                 ))}
+
+                {/* Skeleton tambahan saat fetching */}
                 {isFetchingNextPage &&
                   Array.from({ length: 4 }).map((_, i) => (
                     <CardSkeleton key={`more-${i}`} />
@@ -100,6 +135,7 @@ export default function ProductsPage() {
               </div>
             )}
 
+            {/* ========== Load More Button ========== */}
             {cards.length > 0 && (
               <div className='text-center mt-8'>
                 {hasNextPage ? (
@@ -124,6 +160,9 @@ export default function ProductsPage() {
   );
 }
 
+/* =========================
+   Utility: Currency Formatter
+========================= */
 function formatIDR(n?: number) {
   if (typeof n !== 'number') return '-';
   return new Intl.NumberFormat('id-ID', {

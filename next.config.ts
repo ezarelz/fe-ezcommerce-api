@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*' },
+      { protocol: 'https', hostname: '/' },
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       // tambah domain lain jika API kirim CDN berbeda
     ],

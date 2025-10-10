@@ -14,7 +14,7 @@ const items = [
   },
   { href: '/seller/products', label: 'Products', icon: '/icons/box.svg' },
   { href: '/seller/orders', label: 'Order List', icon: '/icons/file.svg' },
-  { href: '/seller/reviews', label: 'Reviews', icon: '/icons/star-rating.svg' },
+  { href: '/seller/reviews', label: 'Reviews', icon: '/icons/star.svg' },
   { href: '/seller/settings', label: 'Settings', icon: '/icons/settings.svg' },
 ];
 

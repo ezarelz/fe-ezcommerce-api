@@ -10,6 +10,7 @@ import { useMutation } from '@tanstack/react-query';
 import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
 import { api } from '@/lib/api';
+import LogoutConfirm from '@/components/container/account/LogoutConfirm';
 
 /* ========== Utils ========== */
 const rp = (n: number) =>
@@ -335,15 +336,17 @@ export default function OrdersPage() {
                   <Image src='/icons/star.svg' alt='' width={16} height={16} />
                   Review
                 </Link>
-                <button className='flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-rose-600 hover:bg-rose-50'>
-                  <Image
-                    src='/icons/logout.svg'
-                    alt=''
-                    width={16}
-                    height={16}
-                  />
-                  Logout
-                </button>
+                <LogoutConfirm redirectTo='/'>
+                  <button className='flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-rose-600 hover:bg-rose-50'>
+                    <Image
+                      src='/icons/logout.svg'
+                      alt=''
+                      width={16}
+                      height={16}
+                    />
+                    Logout
+                  </button>
+                </LogoutConfirm>
               </nav>
             </aside>
 
@@ -551,7 +554,7 @@ export default function OrdersPage() {
                                 )}
                               {mapOrderToTab(o) === 'COMPLETED' && (
                                 <Link
-                                  href={`/review?itemId=${it.id}`}
+                                  href={`/review?itemId=${it.productId}`}
                                   className='rounded-lg border border-zinc-300 px-3 py-1 text-xs hover:bg-zinc-50'
                                 >
                                   Give Review
