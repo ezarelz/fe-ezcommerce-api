@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛍️ E-Commerce WPH API - Challenge Ezar WPH048
 
-## Getting Started
+A modern RESTful API built for the **WPH Bootcamp E-Commerce Project**.  
+This backend powers the **Next.js + TypeScript + Tailwind** frontend, enabling buyer–seller interactions, product management, checkout, and order workflows.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Tech Stack
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Layer              | Technology                    |
+| ------------------ | ----------------------------- |
+| Framework          | Next.js (App Router)          |
+| Library            | React 19                      |
+| Language           | TypeScript                    |
+| Styling            | Tailwind CSS v4               |
+| UI Components      | ShadCN UI (Radix Primitives)  |
+| Forms & Validation | React Hook Form + Zod         |
+| HTTP Client        | Axios (custom `api()` helper) |
+| Optimistic UI      | TanStack React Query          |
+| Image Handling     | Cloudinary                    |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🧩 Features
 
-## Learn More
+### 👤 Authentication
 
-To learn more about Next.js, take a look at the following resources:
+- **POST** `/api/auth/register` – Register new user (buyer by default)
+- **POST** `/api/auth/login` – Login and receive access token
+- **GET** `/api/me` – Retrieve logged-in user info
+- **PATCH** `/api/me` – Update profile (name, avatar, etc.)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+> 🔐 All private routes require a valid JWT token in the `Authorization` header.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+### 🏪 Seller Management
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **POST** `/api/seller/activate` – Convert buyer → seller (open store)
+- **GET** `/api/seller/shop` – Get seller’s shop info
+- **PATCH** `/api/seller/shop` – Update shop name or logo
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+### 🛒 Product Management
+
+- **GET** `/api/products` – Get paginated product list (with query filters)
+- **GET** `/api/products/:id` – Get product details + reviews
+- **POST** `/api/products` – Add new product _(seller only)_
+- **PATCH** `/api/products/:id` – Update product _(seller only)_
+- **DELETE** `/api/products/:id` – Delete product _(seller only)_
+
+> 🖼️ Image uploads handled via **Cloudinary** integration.  
+> FE uses multipart/form-data via Swagger or Axios.
+
+---
+
+### 🧺 Cart System
+
+- **GET** `/api/cart` – Retrieve cart items for buyer
+- **POST** `/api/cart` – Add product to cart
+- **PATCH** `/api/cart/:id` – Update quantity
+- **DELETE** `/api/cart/:id` – Remove item from cart
+
+---
+
+### 💳 Checkout & Orders
+
+- **POST** `/api/orders/checkout`  
+  Create a new order and simulate payment (mocked as `PAID`).  
+  **Body Example:**
+  ```json
+  {
+    "address": "Jl. Merdeka No. 123",
+    "shipping": "JNE",
+    "payment": "BCA"
+  }
+  ```
+
+## 🧾 License
+
+**Free to Use — Open for Learning and Portfolio Projects**  
+This project is built using the official **WPH (Web Programming Hack Bootcamp)** backend API.  
+You are free to **modify, reuse, and distribute** this project for **educational or non-commercial** purposes.
+
+Attribution to the original creator **Manggala Eleazar** and **WPH Bootcamp** is appreciated but not required.
