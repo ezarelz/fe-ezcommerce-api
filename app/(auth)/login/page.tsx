@@ -8,14 +8,28 @@ import { z } from 'zod';
 import { useLogin } from '@/hooks/useSession';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Suspense } from 'react'; // ✅ tambahkan ini
+
+// ✅ tambahkan baris berikut untuk menghindari pre-render error di build
+export const dynamic = 'force-dynamic';
 
 const loginSchema = z.object({
-  email: z.email('Invalid email'),
+  email: z.string().email('Invalid email'), // ✅ perbaiki zod syntax (z.email → z.string().email)
   password: z.string().min(6, 'Min. 6 characters'),
 });
 type LoginInput = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+  // ✅ bungkus seluruh konten di dalam <Suspense> agar aman untuk useSearchParams
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  );
+}
+
+// ✅ pindahkan seluruh logic lama ke komponen baru
+function LoginInner() {
   const router = useRouter();
   const params = useSearchParams();
   const returnTo = params.get('return_to') || '/products';
