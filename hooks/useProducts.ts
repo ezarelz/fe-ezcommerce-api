@@ -1,9 +1,19 @@
 // src/hooks/useProducts.ts
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { getProductById, getProducts, getRelatedProducts } from '@/lib/api';
-import type { ApiProduct, ApiProductDetail } from '@/types/products';
+import {
+  getProductById,
+  getRelatedProducts,
+  getProductsList, // [ADD]
+  getProductsPage, // [ADD]
+} from '@/lib/api';
+import type {
+  ApiProduct,
+  ApiProductDetail,
+  ApiProductsResponse, // [ADD]
+} from '@/types/products';
 
 /** Non-infinite list */
+// [CHANGE] — gunakan getProductsList (page-based page=1) agar shape konsisten
 export function useProducts(args?: {
   limit?: number;
   q?: string;
@@ -14,7 +24,7 @@ export function useProducts(args?: {
   return useQuery<ApiProduct[], Error>({
     queryKey: ['products', args],
     queryFn: () =>
-      getProducts({
+      getProductsList({
         limit: args?.limit,
         q: args?.q,
         category: args?.category,
@@ -24,7 +34,8 @@ export function useProducts(args?: {
   });
 }
 
-/** Infinite list (cursor optional; akan berhenti otomatis jika BE belum support) */
+/** Infinite list (page-based sesuai BE) */
+// [CHANGE] — sebelumnya cursor-based & getNextPageParam selalu undefined
 export function useProductsInfinite(
   limit = 20,
   extras?: {
@@ -34,20 +45,27 @@ export function useProductsInfinite(
     ids?: number[];
   }
 ) {
-  return useInfiniteQuery<ApiProduct[], Error>({
+  return useInfiniteQuery<ApiProductsResponse, Error>({
     queryKey: ['products-infinite', limit, extras],
-    queryFn: ({ pageParam }) =>
-      getProducts({
+    initialPageParam: 1, // mulai dari page 1
+    queryFn: ({ pageParam = 1 }) =>
+      getProductsPage({
+        page: pageParam as number,
         limit,
-        cursor: (pageParam as string | number | null) ?? null,
         q: extras?.q,
         category: extras?.category,
         sellerId: extras?.sellerId,
         ids: extras?.ids,
       }),
-    initialPageParam: null,
-    // BE saat ini belum expose cursor → undefined = tidak ada page berikutnya
-    getNextPageParam: () => undefined,
+    getNextPageParam: (lastPage) => {
+      const { page, totalPages } = lastPage.data.pagination;
+      return page < totalPages ? page + 1 : undefined;
+    },
+    // [ADD] — siapkan items datar biar enak dipakai di UI
+    select: (data) => {
+      const items = data.pages.flatMap((p) => p.data.products);
+      return { ...data, items } as typeof data & { items: ApiProduct[] };
+    },
   });
 }
 
@@ -60,6 +78,7 @@ export function useProduct(id: number | string) {
   });
 }
 
+/** Related */
 export function useRelatedProducts(args: {
   categoryId?: number;
   excludeId?: number;

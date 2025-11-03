@@ -8,13 +8,12 @@ import { z } from 'zod';
 import { useLogin } from '@/hooks/useSession';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Suspense } from 'react'; // ✅ tambahkan ini
+import { Suspense } from 'react';
 
-// ✅ tambahkan baris berikut untuk menghindari pre-render error di build
 export const dynamic = 'force-dynamic';
 
 const loginSchema = z.object({
-  email: z.string().email('Invalid email'), // ✅ perbaiki zod syntax (z.email → z.string().email)
+  email: z.email('Invalid email'),
   password: z.string().min(6, 'Min. 6 characters'),
 });
 type LoginInput = z.infer<typeof loginSchema>;

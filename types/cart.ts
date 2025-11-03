@@ -1,14 +1,11 @@
 // types/cart.ts
 
-// types/cart.ts
-
 export type CategoryLite = {
   id: number | string;
   name: string;
   slug: string;
 };
 
-// ✅ jadikan opsional agar kompatibel dengan detail yang parsial
 export type ShopLite = {
   id?: number | string;
   name?: string;

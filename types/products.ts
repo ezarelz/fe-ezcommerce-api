@@ -13,6 +13,22 @@ export type ApiProduct = {
   shop: { id: number; name: string; slug: string };
 };
 
+export type ApiPagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
+export type ApiProductsResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    products: ApiProduct[];
+    pagination: ApiPagination; // ← tambahkan ini
+  };
+};
+
 export type ProductCardVM = {
   id: number;
   name: string;
@@ -29,12 +45,6 @@ export type RelatedProductVM = {
   imageUrl?: string;
   rating?: number;
   shopName?: string;
-};
-
-export type ApiProductsResponse = {
-  success: boolean;
-  message: string;
-  data: { products: ApiProduct[] };
 };
 
 // ADD these for detail:

@@ -5,28 +5,28 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
+/**
+ * Status pesanan seller
+ */
 export type SellerOrderStatus =
-  | 'NEW'
-  | 'CONFIRMED'
-  | 'SHIPPED'
+  | 'PENDING'
+  | 'DELIVERED'
   | 'CANCELLED'
   | 'COMPLETED';
 
 export type DashboardOrderItem = {
   id: number;
   orderId: number;
-  code: string;
-  qty: number;
-  priceSnapshot: number;
+  productId: number;
+  quantity: number;
+  price: number;
   status: SellerOrderStatus;
-  createdAt: string;
-  product?: { id: number; title: string; images?: string[] };
-  buyer?: { name?: string; phone?: string };
-  shipping?: {
-    method?: string;
-    address?: string;
-    city?: string;
-    postalCode?: string;
+  createdAt?: string;
+  product?: {
+    id: number;
+    title: string;
+    images?: string[];
+    price?: number;
   };
 };
 
@@ -39,6 +39,9 @@ export type DashboardMetrics = {
 
 type ApiResp<T> = { success: boolean; message: string; data: T };
 
+/**
+ * Normalisasi hasil API agar selalu array
+ */
 function normalizeToArray(payload: any): DashboardOrderItem[] {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -48,23 +51,23 @@ function normalizeToArray(payload: any): DashboardOrderItem[] {
 }
 
 /**
- * Hook khusus dashboard:
- * - ambil semua order-items seller dari /api/seller/order-items
- * - hitung metrics akurat berdasarkan data nyata dari API
+ * ✅ Hook utama untuk dashboard seller
+ * Ambil order items dari `/api/seller-fulfillment/order-items`
+ * dan hitung metrics otomatis.
  */
 export function useSellerOrderItems(opts?: {
   status?: SellerOrderStatus | 'ALL';
   take?: number;
 }) {
-  const { status = 'COMPLETED', take = 100 } = opts ?? {};
+  const { status = 'ALL', take = 100 } = opts ?? {};
 
   const q = useQuery({
     queryKey: ['seller', 'order-items', { status, take }],
     queryFn: async (): Promise<DashboardOrderItem[]> => {
-      const res = await api<ApiResp<any>>('/api/seller/order-items', {
-        method: 'GET',
-        useAuth: true,
-      });
+      const res = await api<ApiResp<DashboardOrderItem[]>>(
+        '/api/seller-fulfillment/order-items',
+        { method: 'GET', useAuth: true }
+      );
       return normalizeToArray(res.data);
     },
     staleTime: 30_000,
@@ -73,17 +76,18 @@ export function useSellerOrderItems(opts?: {
   const { items, metrics } = useMemo(() => {
     const all = q.data ?? [];
 
-    // filter sesuai status yang diminta (default COMPLETED)
+    // Filter berdasarkan status kalau bukan 'ALL'
     const filtered =
       status === 'ALL'
         ? all
-        : all.filter((i) => String(i.status).toUpperCase() === 'COMPLETED');
+        : all.filter(
+            (i) => String(i.status).toUpperCase() === status.toUpperCase()
+          );
 
     const sliced = filtered.slice(0, take);
 
     // === HITUNG METRICS ===
     const totalProducts = new Set(all.map((i) => i.product?.id)).size;
-
     const totalOrders = new Set(all.map((i) => i.orderId)).size;
 
     const completedOrders = new Set(
@@ -93,10 +97,11 @@ export function useSellerOrderItems(opts?: {
     ).size;
 
     const totalRevenue = all
-      .filter((i) => String(i.status).toUpperCase() === 'COMPLETED')
+      .filter((i) =>
+        ['DELIVERED', 'COMPLETED'].includes(String(i.status).toUpperCase())
+      )
       .reduce(
-        (sum, i) =>
-          sum + (Number(i.qty) || 0) * (Number(i.priceSnapshot ?? 0) || 0),
+        (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.price) || 0),
         0
       );
 

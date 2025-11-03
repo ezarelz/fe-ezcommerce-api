@@ -1,10 +1,9 @@
-// app/me/page.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useForm } from 'react-hook-form';
-import { string, z } from 'zod';
+import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import Header from '@/components/container/Header';
@@ -14,7 +13,7 @@ import { useMe, useUpdateMe } from '@/hooks/useSession';
 const ProfileSchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(80, 'Max 80 chars'),
   phone: z.string().trim().max(30, 'Max 30 chars').optional().or(z.literal('')),
-  avatarUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  avatar: z.any().optional(),
 });
 
 type ProfileForm = z.infer<typeof ProfileSchema>;
@@ -31,30 +30,43 @@ export default function MePage() {
     formState: { errors, isDirty },
   } = useForm<ProfileForm>({
     resolver: zodResolver(ProfileSchema),
-    defaultValues: { name: '', phone: '', avatarUrl: '' },
+    defaultValues: { name: '', phone: '' },
   });
 
-  // isi form dengan data GET /api/me
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  /** 🧭 Saat data user (me) sudah di-load */
   useEffect(() => {
     if (me) {
       reset({
         name: me.name ?? '',
-        phone: undefined,
-        avatarUrl: me.avatarUrl ?? '',
+        phone: me.phone ?? '',
       });
+      setPreview(me.avatarUrl ?? null);
     }
   }, [me, reset]);
 
-  const onSubmit = (values: ProfileForm) => {
-    const body = {
-      name: values.name?.trim(),
-      phone: values.phone?.trim() || undefined,
-      avatarUrl: values.avatarUrl?.trim() || undefined,
-    };
-    update.mutate(body);
+  /** 🧾 Handle form submit */
+  const onSubmit = async (values: ProfileForm) => {
+    try {
+      const formData = new FormData();
+      formData.append('name', values.name.trim());
+      if (values.phone) formData.append('phone', values.phone.trim());
+      if (values.avatar?.[0]) formData.append('avatar', values.avatar[0]);
+
+      await update.mutateAsync(formData);
+      setPreview(
+        values.avatar?.[0]
+          ? URL.createObjectURL(values.avatar[0])
+          : me?.avatarUrl ?? null
+      );
+    } catch (error) {
+      console.error('❌ Update failed:', error);
+    }
   };
 
-  const preview = watch('avatarUrl');
+  const selectedFile = watch('avatar')?.[0];
 
   return (
     <>
@@ -62,44 +74,50 @@ export default function MePage() {
       <main className='container mx-auto max-w-2xl px-4 py-8'>
         <h1 className='text-2xl font-semibold mb-6'>My Profile</h1>
 
-        {isLoading && (
-          <div className='text-sm opacity-70'>Loading profile…</div>
-        )}
+        {isLoading && <p className='text-sm opacity-70'>Loading profile…</p>}
         {isError && (
-          <div className='text-sm text-red-600'>Failed to load profile.</div>
+          <p className='text-sm text-red-600'>Failed to load profile.</p>
         )}
 
         {me && (
           <form onSubmit={handleSubmit(onSubmit)} className='space-y-6'>
-            {/* Avatar preview */}
+            {/* Avatar Upload */}
             <div className='flex items-start gap-4'>
               <div className='relative h-20 w-20 overflow-hidden rounded-full border bg-gray-100'>
                 <Image
-                  src={preview || me.avatarUrl || '/placeholder-avatar.png'}
+                  src={
+                    selectedFile
+                      ? URL.createObjectURL(selectedFile)
+                      : preview || '/placeholder-avatar.png'
+                  }
                   alt='Avatar'
                   fill
                   className='object-cover'
                   sizes='80px'
                 />
               </div>
+
               <div className='flex-1'>
                 <label className='block text-sm font-medium mb-1'>
-                  Avatar URL
+                  Upload Avatar
                 </label>
                 <input
-                  type='url'
-                  placeholder='https://res.cloudinary.com/…/avatar.jpg'
-                  className='w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring'
-                  {...register('avatarUrl')}
+                  type='file'
+                  accept='image/*'
+                  className='block w-full text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-1 file:text-sm file:font-medium file:bg-gray-100 hover:file:bg-gray-200'
+                  {...register('avatar')}
+                  ref={(e) => {
+                    register('avatar').ref(e);
+                    fileRef.current = e;
+                  }}
                 />
-                {errors.avatarUrl && (
+                {errors.avatar && (
                   <p className='mt-1 text-xs text-red-600'>
-                    {errors.avatarUrl.message}
+                    {errors.avatar.message as string}
                   </p>
                 )}
                 <p className='mt-1 text-xs opacity-70'>
-                  Enter Image URL (Cloudinary, PNG, WEBP Only). Preview on the
-                  Left Side.
+                  JPG, PNG, WEBP only. Max 5MB.
                 </p>
               </div>
             </div>
@@ -145,7 +163,7 @@ export default function MePage() {
                 className='w-full rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-600'
               />
               <p className='mt-1 text-xs opacity-70'>
-                Email cannot be changed from Here.
+                Email cannot be changed here.
               </p>
             </div>
 
@@ -155,31 +173,33 @@ export default function MePage() {
                 type='submit'
                 disabled={update.isPending || !isDirty}
                 className='rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-60'
-                title='Save changes'
               >
                 {update.isPending ? 'Saving…' : 'Save'}
               </button>
 
               <button
                 type='button'
-                onClick={() =>
+                onClick={() => {
                   reset({
                     name: me.name ?? '',
-                    phone: '',
-                    avatarUrl: me.avatarUrl ?? '',
-                  })
-                }
+                    phone: me.phone ?? '',
+                  });
+                  setPreview(me.avatarUrl ?? null);
+                  if (fileRef.current) fileRef.current.value = '';
+                }}
                 className='rounded-md px-3 py-2 text-sm'
               >
                 Reset
               </button>
 
               {update.isSuccess && (
-                <span className='text-sm text-green-700'>Profile updated.</span>
+                <span className='text-sm text-green-700'>
+                  ✅ Profile updated successfully
+                </span>
               )}
               {update.isError && (
                 <span className='text-sm text-red-600'>
-                  Update failed. Try again.
+                  ❌ Update failed. Try again.
                 </span>
               )}
             </div>

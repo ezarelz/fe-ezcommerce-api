@@ -1,15 +1,17 @@
 export type SellerProduct = {
   id: number;
   title: string;
-  description?: string | null;
+  description?: string;
   price: number;
+  images: string[];
   stock: number;
-  categoryId: number;
-  images: string[]; // URLs dikembalikan BE
-  imagesUrl?: string[]; // opsional
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+  rating?: number;
+  reviewCount?: number;
+  soldCount?: number;
+  categoryId?: number;
+  shopId?: number;
+  createdAt?: string;
+  isActive?: boolean; // ✅ optional
 };
 
 export type Paginated<T> = {

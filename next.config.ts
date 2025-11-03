@@ -2,7 +2,6 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // ✅ allow external images (e.g., Cloudinary)
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*' },
@@ -12,7 +11,6 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // ✅ skip TypeScript & ESLint errors during build
   typescript: {
     ignoreBuildErrors: true,
   },

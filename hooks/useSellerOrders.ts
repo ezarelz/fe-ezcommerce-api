@@ -6,38 +6,47 @@ import { api } from '@/lib/api';
 import type { OrderItem, SellerOrderStatus } from '@/types/seller-orders';
 
 type ApiResp<T> = { success: boolean; message: string; data: T };
-
 type ListParams = { page: number; limit: number; status?: SellerOrderStatus };
 
 const qk = {
   list: (p: ListParams) =>
-    ['sellerOrderItems', p.page, p.limit, p.status] as const,
+    ['sellerOrderItems', p.page, p.limit, p.status ?? 'ALL'] as const,
 };
 
-/** Adapter: Swagger → FE OrderItem */
+/* ============================================================
+   ✅ Adapter BE → FE
+   BE return: { success, message, data: [ { id, product, order, ... } ] }
+=============================================================== */
 function toOrderItem(r: any): OrderItem {
-  const qty = r.qty ?? 0;
-  const unit = r.priceSnapshot ?? 0;
-  const img =
-    r.product?.images?.[0] ?? r.product?.imageUrl ?? r.imageUrl ?? null;
+  const product = r.product ?? {};
+  const order = r.order ?? {};
+  const user = order.user ?? {};
+
+  const quantity = r.quantity ?? 0;
+  const unitPrice = r.price ?? product.price ?? 0;
 
   return {
     id: r.id,
-    status: r.status, // 'NEW' | 'CONFIRMED' | 'SHIPPED' | 'COMPLETED' | 'CANCELLED'
-    invoice: r.code ?? null,
-    createdAt: r.createdAt ?? null,
-    productTitle: r.product?.title ?? '-',
-    productImage: img,
-    quantity: qty,
-    unitPrice: unit,
-    totalPrice: unit * qty,
-    buyerName: r.buyer?.name ?? '',
-    buyerPhone: r.buyer?.phone ?? '',
-    shippingAddress: r.shipping?.address ?? '', // BE tidak ada di list → tetap aman
-    shippingMethod: r.shipping?.method ?? '-',
+    invoice: `INV-${order.id ?? r.id}`,
+    status: r.status, // "PENDING" | "DELIVERED" | "COMPLETED" | "CANCELLED"
+    createdAt: order.createdAt ?? null,
+
+    productTitle: product.title ?? '-',
+    productImage: product.images?.[0] ?? '/placeholder.png',
+    quantity,
+    unitPrice,
+    totalPrice: quantity * unitPrice,
+
+    buyerName: user.name ?? '-',
+    buyerPhone: user.phone ?? '', // BE belum kirim → fallback kosong string
+    shippingAddress: order.address ?? '-', // 🟢 ditarik dari BE baru
+    shippingMethod: order.shipping ?? '-', // 🟢 ditarik dari BE baru
   };
 }
 
+/* ============================================================
+   ✅ GET /api/seller-fulfillment/order-items
+=============================================================== */
 export function useSellerOrderItems(p: ListParams) {
   const qs = new URLSearchParams({
     page: String(p.page),
@@ -48,19 +57,27 @@ export function useSellerOrderItems(p: ListParams) {
   return useQuery({
     queryKey: qk.list(p),
     queryFn: async () => {
-      const res = await api<ApiResp<{ items: any[]; total: number }>>(
-        `/api/seller/order-items?${qs.toString()}`,
+      const res = await api<ApiResp<any[]>>(
+        `/api/seller-fulfillment/order-items?${qs.toString()}`,
         { method: 'GET', useAuth: true }
       );
-      const itemsRaw = res.data.items ?? [];
+
+      if (!res?.success) {
+        throw new Error(res?.message || 'Failed to fetch order items');
+      }
+
+      const itemsRaw = res.data ?? [];
       return {
         items: itemsRaw.map(toOrderItem),
-        total: res.data.total ?? itemsRaw.length ?? 0,
+        total: itemsRaw.length,
       };
     },
   });
 }
 
+/* ============================================================
+   ✅ PATCH /api/seller-fulfillment/order-items/:id/status
+=============================================================== */
 export function useUpdateOrderItemStatus() {
   const qc = useQueryClient();
 
@@ -70,21 +87,26 @@ export function useUpdateOrderItemStatus() {
       status,
     }: {
       id: number;
-      status: 'CONFIRMED' | 'SHIPPED' | 'CANCELLED';
+      status: 'DELIVERED' | 'CANCELLED';
     }) => {
-      const res = await api<{ success: boolean; message: string; data: any }>(
-        `/api/seller/order-items/${id}/status`,
+      const res = await api<ApiResp<any>>(
+        `/api/seller-fulfillment/order-items/${id}/status`,
         {
           method: 'PATCH',
           useAuth: true,
           headers: { 'Content-Type': 'application/json' },
-          data: JSON.stringify({ status }),
+          data: { status },
         }
       );
-      if (!res?.success)
-        throw new Error(res?.message || 'Update status failed');
+
+      if (!res?.success) {
+        throw new Error(res?.message || 'Failed to update order status');
+      }
+
       return res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sellerOrderItems'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sellerOrderItems'] });
+    },
   });
 }

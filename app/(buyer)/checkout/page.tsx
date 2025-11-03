@@ -49,26 +49,6 @@ type ProductDetail = {
   shop?: ProductShop;
 };
 
-type RawCartItem = {
-  id: number; // ← ini ID CART ITEM (yang akan dipakai untuk selectedItemIds)
-  qty: number;
-  product: {
-    id: number;
-    title?: string;
-    name?: string;
-    price: number;
-    imageUrl?: string | null;
-    image?: string | null;
-    images?: string[] | null;
-  };
-};
-
-type RawCart = {
-  cartId?: number;
-  items: RawCartItem[];
-  grandTotal?: number;
-};
-
 type CartItem = {
   id: number; // ← id cart item
   qty: number;
@@ -116,28 +96,83 @@ async function enrichCartWithShops(items: CartItem[]): Promise<CartItem[]> {
 
 /* ---------- GET /api/cart via api() helper (Axios) ---------- */
 async function fetchCart(): Promise<CartItem[]> {
-  const res = await api<ApiResp<RawCart>>('/api/cart', {
+  // Tipe response BE
+  type CartShop = {
+    id: number;
+    name: string;
+    slug?: string;
+    logo?: string | null;
+  };
+
+  type CartProduct = {
+    id: number;
+    title?: string;
+    name?: string;
+    price: number;
+    imageUrl?: string | null;
+    image?: string | null;
+    images?: string[] | null;
+    shop?: CartShop;
+  };
+
+  type RawCartItem = {
+    id: number;
+    quantity: number;
+    product: CartProduct;
+    subtotal?: number;
+  };
+
+  type RawCartGroup = {
+    shop: CartShop;
+    items: RawCartItem[];
+    total: number;
+  };
+
+  type RawCartResponse = {
+    groups: RawCartGroup[];
+    grandTotal: number;
+  };
+
+  // Ambil data dari API
+  const res = await api<ApiResp<RawCartResponse>>('/api/cart', {
     method: 'GET',
     useAuth: true,
   });
 
-  const items = res.data?.items ?? [];
-  const normalized: CartItem[] = items.map((it) => {
+  const groups: RawCartGroup[] =
+    (res.data as unknown as { groups?: RawCartGroup[] })?.groups ??
+    (res.data as unknown as { data?: { groups?: RawCartGroup[] } })?.data
+      ?.groups ??
+    [];
+
+  // Gabungkan semua item dari tiap toko
+  const flatItems: RawCartItem[] = groups.flatMap((group) => group.items ?? []);
+
+  const normalized: CartItem[] = flatItems.map((it) => {
     const p = it.product;
     const name = (p.title ?? p.name ?? 'Product').toString();
+
     const img =
       p.imageUrl ??
       p.image ??
       (Array.isArray(p.images) ? p.images[0] ?? null : null);
 
     return {
-      id: it.id, // penting: simpan id CART ITEM
-      qty: it.qty,
+      id: it.id,
+      qty: it.quantity ?? 1,
       product: {
         id: p.id,
         name,
         price: Number(p.price ?? 0),
         imageUrl: img ?? null,
+        shop: p.shop
+          ? {
+              id: p.shop.id,
+              name: p.shop.name,
+              slug: p.shop.slug,
+              logo: p.shop.logo,
+            }
+          : undefined,
       },
     };
   });
@@ -145,24 +180,21 @@ async function fetchCart(): Promise<CartItem[]> {
   return enrichCartWithShops(normalized);
 }
 
-/* ====== Checkout endpoint V4 ====== */
-type CheckoutReqV4 = {
-  address: {
-    name: string;
-    phone: string;
-    city: string;
-    postalCode: string;
-    address: string;
-  };
-  shippingMethod: string;
-  selectedItemIds: number[]; // ← array ID cart item
+/* ====== Checkout endpoint sesuai BE v5 ====== */
+type CheckoutReq = {
+  address: string;
+  shipping: ShippingCode;
+  payment: PaymentCode;
+  selectedItemIds: number[];
 };
-type CheckoutRespV4 = unknown;
-
-// Label yang diharapkan BE (ikuti Swagger)
-const SHIPPING_METHOD_LABEL: Record<ShippingCode, string> = {
-  JNT: 'JNT EXPRESS',
-  JNE: 'JNE REG',
+type CheckoutResp = {
+  success: boolean;
+  message: string;
+  data?: {
+    id: number;
+    grandTotal: number;
+    status: string;
+  };
 };
 
 export default function CheckoutPage() {
@@ -221,34 +253,32 @@ export default function CheckoutPage() {
     if (!cart || cart.length === 0) return;
 
     try {
-      // ambil SEMUA id cart item (kalau nanti ada UI checkbox, ganti di sini)
       const selectedItemIds = cart.map((it) => it.id);
 
-      const payload: CheckoutReqV4 = {
-        address: {
-          name: values.name.trim(),
-          phone: values.phone.trim(),
-          city: values.city.trim(),
-          postalCode: String(values.postal).trim(),
-          address: values.address.trim(),
-        },
-        shippingMethod: SHIPPING_METHOD_LABEL[values.shipping],
+      // Backend expects simple flat fields
+      const payload: CheckoutReq = {
+        address: values.address.trim(),
+        shipping: values.shipping,
+        payment: values.payment,
         selectedItemIds,
       };
 
-      await api<ApiResp<CheckoutRespV4>>('/api/orders/checkout', {
+      const res = await api<ApiResp<CheckoutResp>>('/api/orders/checkout', {
         method: 'POST',
-        data: payload, // Axios → data
+        data: payload,
         useAuth: true,
       });
 
-      router.push('/checkout/success');
+      if (res.success) {
+        router.push('/checkout/success');
+      } else {
+        router.push('/checkout/failure');
+      }
     } catch (e) {
       console.error('Checkout failed:', e);
       router.push('/checkout/failure');
     }
   };
-
   const shopName =
     cart && cart.length > 0 ? cart[0].product.shop?.name ?? 'Toko' : '—';
 

@@ -1,4 +1,4 @@
-// src/lib/api.ts
+// lib/api.ts
 import axios, {
   AxiosError,
   AxiosInstance,
@@ -6,40 +6,56 @@ import axios, {
   AxiosHeaders,
 } from 'axios';
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL!;
+/* ==========================================================
+   BASE URL SETUP
+   ========================================================== */
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ||
+  'http://localhost:4000';
 
-/* =============== Token helper =============== */
+/* ==========================================================
+   TOKEN HELPER
+   ========================================================== */
 export const TOKEN_KEY = 'token';
 export const token = {
-  get: () =>
+  get: (): string | null =>
     typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null,
-  set: (t: string) =>
-    typeof window !== 'undefined' && localStorage.setItem(TOKEN_KEY, t),
-  clear: () =>
-    typeof window !== 'undefined' && localStorage.removeItem(TOKEN_KEY),
+  set: (t: string) => {
+    if (typeof window !== 'undefined') localStorage.setItem(TOKEN_KEY, t);
+  },
+  clear: () => {
+    if (typeof window !== 'undefined') localStorage.removeItem(TOKEN_KEY);
+  },
 };
 
-/* =============== Axios instance =============== */
-// NOTE: jangan set Content-Type di level instance (bisa ganggu FormData)
+/* ==========================================================
+   AXIOS INSTANCE
+   ========================================================== */
+// NOTE: jangan set Content-Type default di instance (bisa ganggu FormData)
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE,
-  // headers: { 'Content-Type': 'application/json' }, // ← HAPUS
 });
 
-/** Request config dengan flag useAuth */
+/* ==========================================================
+   CUSTOM CONFIG TYPE
+   ========================================================== */
 export type ApiInit = AxiosRequestConfig & {
   useAuth?: boolean;
 };
 
-/* Inject Bearer token hanya jika useAuth = true
-   & bersihkan Content-Type kalau data = FormData (biar Axios set boundary) */
+/* ==========================================================
+   REQUEST INTERCEPTOR
+   ========================================================== */
 apiClient.interceptors.request.use((config) => {
   const init = config as ApiInit;
 
+  // Inject Bearer token jika useAuth true
   if (init.useAuth) {
     const t = token.get();
     if (t) {
       if (!config.headers) config.headers = new AxiosHeaders();
+
+      // Set Authorization header
       if (config.headers instanceof AxiosHeaders) {
         config.headers.set('Authorization', `Bearer ${t}`);
       } else {
@@ -47,17 +63,28 @@ apiClient.interceptors.request.use((config) => {
           'Authorization'
         ] = `Bearer ${t}`;
       }
+
+      // 🔍 Debug: pastikan token dikirim
+      if (process.env.NODE_ENV === 'development') {
+        console.log(
+          `🔑 [API] Authorization header attached: Bearer ${t.slice(0, 15)}...`
+        );
+      }
+    } else if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '⚠️ [API] useAuth = true but no token found in localStorage'
+      );
     }
   }
 
-  // Jika kirim JSON (string / object), set Content-Type json
+  // Deteksi FormData
   const isFormData =
     typeof config.data !== 'undefined' &&
     typeof FormData !== 'undefined' &&
     config.data instanceof FormData;
 
   if (!isFormData) {
-    // untuk JSON (string/object)
+    // Untuk JSON (object / string)
     if (!config.headers) config.headers = new AxiosHeaders();
     if (config.headers instanceof AxiosHeaders) {
       if (!config.headers.has('Content-Type')) {
@@ -68,7 +95,7 @@ apiClient.interceptors.request.use((config) => {
         'application/json';
     }
   } else {
-    // biarkan axios set boundary untuk FormData
+    // Biarkan axios set boundary untuk FormData
     if (config.headers instanceof AxiosHeaders) {
       config.headers.delete('Content-Type');
     } else if (config.headers) {
@@ -79,31 +106,43 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-/* =============== Generic request helper =============== */
+/* ==========================================================
+   GENERIC REQUEST HELPER
+   ========================================================== */
 export async function api<T>(path: string, init?: ApiInit): Promise<T> {
   try {
-    // IMPORTANT: Axios memakai "data", BUKAN "body"
     const res = await apiClient.request<T>({
       url: path,
       ...init,
     });
+
     return res.data;
   } catch (err) {
-    const e = err as AxiosError<{ message?: string }>;
+    const e = err as AxiosError<{ message?: string; error?: string }>;
     const status = e.response?.status;
-    const msg =
-      e.response?.data?.message ||
-      e.message ||
-      `Request failed${status ? `: ${status}` : ''}`;
-    // log detail untuk debugging
-    if (e.response) {
-      console.error('API ERROR', status, e.response.data);
+    const serverMsg =
+      e.response?.data?.message || e.response?.data?.error || e.message;
+
+    // Log lebih detail saat dev
+    if (process.env.NODE_ENV === 'development') {
+      console.error(
+        `❌ [API ERROR] ${init?.method?.toUpperCase() || 'GET'} ${path}`,
+        status ? `→ ${status}` : '',
+        '\n',
+        e.response?.data || e.message
+      );
     }
-    throw new Error(msg);
+
+    // Buat error yang rapi
+    throw new Error(
+      serverMsg || `Request failed${status ? `: ${status}` : ''}`
+    );
   }
 }
 
-/* =============== Utils kecil =============== */
+/* ==========================================================
+   UTIL QUERY STRING
+   ========================================================== */
 function qs(params?: Record<string, string | number | undefined>): string {
   if (!params) return '';
   const usp = new URLSearchParams();
@@ -114,7 +153,9 @@ function qs(params?: Record<string, string | number | undefined>): string {
   return s ? `?${s}` : '';
 }
 
-/* =============== (Opsional) product helpers =============== */
+/* ==========================================================
+   PRODUCT HELPERS
+   ========================================================== */
 import type {
   ApiProduct,
   ApiProductsResponse,
@@ -146,6 +187,47 @@ export async function getProducts(args?: {
   return resp.data.products;
 }
 
+export async function getProductsPage(args?: {
+  page?: number;
+  limit?: number;
+  q?: string;
+  category?: string;
+  sellerId?: number | string;
+  ids?: number[];
+}): Promise<ApiProductsResponse> {
+  const query = qs({
+    page: args?.page ?? 1,
+    limit: args?.limit ?? 20,
+    q: args?.q,
+    category: args?.category,
+    sellerId: args?.sellerId,
+    ids: args?.ids?.length ? args.ids.join(',') : undefined,
+  });
+
+  const resp = await api<ApiProductsResponse>(`/api/products${query}`, {
+    method: 'GET',
+  });
+  if (!resp.success) throw new Error(resp.message);
+  return resp;
+}
+
+export async function getProductsList(
+  args?: Omit<
+    {
+      page?: number;
+      limit?: number;
+      q?: string;
+      category?: string;
+      sellerId?: number | string;
+      ids?: number[];
+    },
+    'page'
+  >
+): Promise<ApiProduct[]> {
+  const res = await getProductsPage({ ...args, page: 1 });
+  return res.data.products;
+}
+
 export async function getProductById(
   id: number | string
 ): Promise<ApiProductDetail> {
@@ -161,6 +243,9 @@ export async function getRelatedProducts(
   excludeId: number,
   limit = 4
 ): Promise<ApiProduct[]> {
-  const products = await getProducts({ category: String(categoryId), limit });
+  const products = await getProductsList({
+    category: String(categoryId),
+    limit,
+  });
   return products.filter((p) => p.id !== excludeId);
 }

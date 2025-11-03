@@ -16,14 +16,12 @@ type ApiResp<T> = {
   data: T;
 };
 
+/**
+ * ✅ Struktur BE sekarang hanya berisi { products: [...] }
+ * Tidak ada pagination di dalamnya.
+ */
 type BEListResp = {
   products: SellerProduct[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
 };
 
 /* =============== Query keys =============== */
@@ -61,6 +59,10 @@ function toFormData(input: CreateProductInput | UpdateProductInput): FormData {
 }
 
 /* =============== Queries =============== */
+/**
+ * ✅ GET /api/seller/products
+ * BE mengirim { data: { products: [...] } }
+ */
 export function useSellerProducts(page = 1, pageSize = 10, q = '') {
   return useQuery({
     queryKey: qk.list(page, pageSize, q),
@@ -77,12 +79,16 @@ export function useSellerProducts(page = 1, pageSize = 10, q = '') {
       );
 
       if (!res.success) throw new Error(res.message);
-      const { products, pagination } = res.data;
+      const { products } = res.data;
+
       return {
-        items: products,
-        total: pagination.total,
-        page: pagination.page,
-        pageSize: pagination.limit,
+        items: (products ?? []).map((p) => ({
+          ...p,
+          isActive: p.isActive ?? true, // ✅ default active kalau undefined
+        })),
+        total: products?.length ?? 0,
+        page,
+        pageSize,
       };
     },
   });
@@ -130,7 +136,7 @@ export function useUpdateSellerProduct() {
         `/api/seller/products/${vars.id}`,
         {
           method: 'PUT',
-          data: form, // ✅ pakai data
+          data: form,
           useAuth: true,
         }
       );

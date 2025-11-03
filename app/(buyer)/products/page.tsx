@@ -3,10 +3,15 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { InfiniteData } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProductsInfinite } from '@/hooks/useProducts';
-import type { ApiProduct, ProductCardVM } from '@/types/products';
+import type {
+  ApiProduct,
+  ApiProductsResponse,
+  ProductCardVM,
+} from '@/types/products';
 import { toProductCardVM } from '@/lib/transform';
 import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
@@ -66,8 +71,13 @@ export default function ProductsPage() {
   } = useProductsInfinite(20);
 
   // flatten data
-  const all: ApiProduct[] = data?.pages.flatMap((arr) => arr) ?? [];
-  const cards: ProductCardVM[] = all.map(toProductCardVM);
+  type ProductsInfiniteData = InfiniteData<ApiProductsResponse> & {
+    items: ApiProduct[];
+  };
+
+  const items: ApiProduct[] =
+    (data as ProductsInfiniteData | undefined)?.items ?? [];
+  const cards: ProductCardVM[] = items.map(toProductCardVM);
 
   return (
     <>

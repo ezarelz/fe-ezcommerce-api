@@ -88,7 +88,7 @@ export default function ProductDetailPage() {
     );
   }
 
-  const p: ApiProductDetail = data;
+  const p = (data as unknown as { product: ApiProductDetail }).product;
 
   // Gambar & info
   const imgs =
@@ -192,17 +192,24 @@ export default function ProductDetailPage() {
             <div className='mt-4 flex items-center justify-between'>
               <div className='min-w-0'>
                 <div className='font-medium text-zinc-900 truncate'>
-                  {p.shop.name}
+                  {p.shop?.name ?? 'Unknown Shop'}
                 </div>
                 <div className='text-xs text-zinc-600 truncate'>
-                  {p.category.name}
+                  {p.category?.name ?? 'Uncategorized'}
                 </div>
               </div>
-              <Link href={`/shops/${p.shop.slug}`} className='shrink-0'>
-                <Button variant='outline' size='sm'>
+
+              {p.shop?.slug ? (
+                <Link href={`/shops/${p.shop.name}`} className='shrink-0'>
+                  <Button variant='outline' size='sm'>
+                    See Store
+                  </Button>
+                </Link>
+              ) : (
+                <Button variant='outline' size='sm' disabled>
                   See Store
                 </Button>
-              </Link>
+              )}
             </div>
 
             {/* description */}

@@ -8,14 +8,19 @@ import Header from '@/components/container/Header';
 import Footer from '@/components/container/Footer';
 import { useProductsInfinite } from '@/hooks/useProducts';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ApiProduct, ProductCardVM } from '@/types/products';
+import type {
+  ApiProduct,
+  ApiProductsResponse,
+  ProductCardVM,
+} from '@/types/products';
 import { useEffect } from 'react';
 import { useMe } from '@/hooks/useSession';
 import { useRouter } from 'next/navigation';
+import { InfiniteData } from '@tanstack/react-query';
 
 // ====== CONFIG: pilih ID yang ingin ditampilkan di landing ======
-const START_ID = 11;
-const END_ID = 39; // ubah angka ini untuk range lain
+const START_ID = 1;
+const END_ID = 10; // ubah angka ini untuk range lain
 const SELECTED_IDS: number[] = Array.from(
   { length: END_ID - START_ID + 1 },
   (_, i) => START_ID + i
@@ -53,10 +58,10 @@ function toCardVM(p: ApiProduct): ProductCardVM {
 }
 
 export default function HomePage() {
-  const router = useRouter(); // ✅
-  const { data: me, isLoading: meLoading } = useMe(); // ✅
+  const router = useRouter();
+  const { data: me, isLoading: meLoading } = useMe();
 
-  // ✅ Redirect hanya untuk BUYER (sudah login tapi belum punya shop)
+  // Redirect sesuai kebutuhanmu (contoh: user aktif diarahkan ke /products)
   useEffect(() => {
     if (meLoading) return;
     if (me && me.isActive) {
@@ -74,16 +79,18 @@ export default function HomePage() {
     isFetchingNextPage,
   } = useProductsInfinite(SELECTED_IDS.length, { ids: SELECTED_IDS });
 
-  // gunakan infinite agar konsisten dengan file kamu sebelumnya
-  // kita minta langsung ID yang dipilih (jika BE support ?ids=)
+  // beri tahu TS bahwa data adalah hasil dari InfiniteQuery + items:
+  type ProductsInfiniteData = InfiniteData<ApiProductsResponse> & {
+    items: ApiProduct[];
+  };
 
-  // data?.pages adalah ApiProduct[] per halaman -> flatten rapi
-  const apiProducts: ApiProduct[] = data?.pages.flatMap((page) => page) ?? [];
+  // ✅ Ambil array datar dari hook (sudah disiapkan di select: items)
+  const items: ApiProduct[] =
+    (data as ProductsInfiniteData | undefined)?.items ?? [];
 
-  // safety filter (kalau BE tidak support ?ids=) → tetap pastikan hanya ID terpilih
-  const selectedProducts: ApiProduct[] = apiProducts.filter((p) =>
-    SELECTED_IDS.includes(p.id)
-  );
+  // Safety filter jika BE tidak support ?ids=
+  const selectedProducts: ApiProduct[] =
+    items.length > 0 ? items.filter((p) => SELECTED_IDS.includes(p.id)) : [];
 
   const cards: ProductCardVM[] = selectedProducts.map(toCardVM);
 
@@ -168,7 +175,7 @@ export default function HomePage() {
                   {cards.map((c) => (
                     <Link
                       key={c.id}
-                      href={`/products/${c.id}`} // → route detail sesuai folder /products/[id]/page.tsx
+                      href={`/products/${c.id}`}
                       className='group overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition'
                     >
                       <div className='relative w-full h-44 md:h-48'>
@@ -187,7 +194,7 @@ export default function HomePage() {
                         <p className='mt-1 font-semibold text-zinc-900'>
                           {formatIDR(c.price)}
                         </p>
-                        {/* Optional bawah judul (rating & toko) — aktifkan jika mau:
+                        {/* Optional (rating & toko)
                         <div className="mt-1 text-xs text-zinc-600 flex items-center gap-2">
                           <span>⭐ {c.rating?.toFixed(1) ?? '0.0'}</span>
                           <span className="truncate">• {c.shopName ?? '—'}</span>
@@ -199,7 +206,7 @@ export default function HomePage() {
                 </div>
               )}
 
-              {/* Pagination / Load More (opsional; biasanya tak perlu utk range terpilih) */}
+              {/* Load More — biasanya tak perlu untuk landing yang pakai range ID */}
               {cards.length > 0 && hasNextPage && (
                 <div className='text-center mt-8'>
                   <Button

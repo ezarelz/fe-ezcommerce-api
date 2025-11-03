@@ -1,4 +1,4 @@
-// hooks/useCart.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import {
@@ -18,50 +18,80 @@ import type {
 } from '@/types/cart';
 
 /** ==== Bentuk respons mentah dari BE ==== */
-type RawCartItem = {
-  id: number;
-  qty: number;
-  product: {
+type RawGroup = {
+  shop: {
     id: number;
-    title: string;
-    price: number;
-    images: string[];
+    name: string;
+    slug?: string;
   };
+  items: {
+    id: number;
+    quantity: number;
+    product: {
+      id: number;
+      name?: string;
+      title?: string;
+      price: number;
+      imageUrl?: string;
+      images?: string[];
+    };
+    subtotal: number;
+  }[];
+  total: number;
 };
 
 type RawCart = {
-  cartId?: number;
-  items: RawCartItem[];
-  grandTotal?: number;
+  groups: RawGroup[];
+  grandTotal: number;
 };
 
 type ApiResp<T> = { success: boolean; message: string; data: T };
 
 /** ==== Normalizer ==== */
 function normalizeCart(raw: RawCart): CartResponse {
-  const items: CartItem[] = (raw.items ?? []).map((it) => ({
-    id: String(it.id),
-    quantity: Number(it.qty ?? 1),
-    product: {
-      id: it.product.id,
-      title: it.product.title,
-      price: Number(it.product.price ?? 0),
-      images: it.product.images ?? [],
-    },
-  }));
-  return { items };
-}
+  const items: CartItem[] = [];
 
+  (raw.groups ?? []).forEach((g) => {
+    (g.items ?? []).forEach((it) => {
+      items.push({
+        id: String(it.id),
+        quantity: Number(it.quantity ?? 1),
+        product: {
+          id: it.product.id,
+          title: it.product.title ?? it.product.name ?? 'Unknown Product',
+          price: Number(it.product.price ?? 0),
+          images: it.product.images?.length
+            ? it.product.images
+            : it.product.imageUrl
+            ? [it.product.imageUrl]
+            : [],
+
+          shop: {
+            id: g.shop.id,
+            name: g.shop.name ?? 'Unknown Shop',
+            slug: g.shop.slug ?? undefined,
+          },
+        },
+      });
+    });
+  });
+
+  return { items, grandTotal: Number(raw.grandTotal ?? 0) };
+}
 /** ==== GET /api/cart ==== */
 export function useCart() {
   return useQuery<CartResponse, Error>({
     queryKey: QK.cart(),
     queryFn: async () => {
+      // pastikan deklarasi generic di sini
       const res = await api<ApiResp<RawCart>>('/api/cart', {
         method: 'GET',
         useAuth: true,
       });
-      return normalizeCart(res.data);
+
+      // ambil data di dalam response wrapper
+      const raw = (res.data as any).data ?? res.data;
+      return normalizeCart(raw);
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -69,7 +99,6 @@ export function useCart() {
     notifyOnChangeProps: ['data', 'isLoading', 'isError'],
   });
 }
-
 /** ==== Cart Count (badge) ==== */
 export function useCartCount() {
   const { data } = useCart();
@@ -86,7 +115,7 @@ export function useAddToCart() {
         data: { productId: payload.productId, qty: payload.quantity },
         useAuth: true,
       });
-      return normalizeCart(res.data);
+      return normalizeCart((res.data as any).data ?? res.data);
     },
     onMutate: async (payload) => {
       await qc.cancelQueries({ queryKey: QK.cart() });
@@ -99,6 +128,7 @@ export function useAddToCart() {
         let next: CartResponse;
         if (exists) {
           next = {
+            ...prev,
             items: prev.items.map((it) =>
               it.product.id === payload.productId
                 ? { ...it, quantity: it.quantity + payload.quantity }
@@ -107,6 +137,7 @@ export function useAddToCart() {
           };
         } else {
           next = {
+            ...prev,
             items: [
               ...prev.items,
               {
@@ -149,7 +180,7 @@ export function useUpdateCartItem() {
         data: { qty: quantity },
         useAuth: true,
       });
-      return normalizeCart(res.data);
+      return normalizeCart((res.data as any).data ?? res.data);
     },
     onMutate: async ({ cartItemId, quantity }) => {
       await qc.cancelQueries({ queryKey: QK.cart() });
@@ -157,6 +188,7 @@ export function useUpdateCartItem() {
 
       if (prev) {
         const next: CartResponse = {
+          ...prev,
           items: prev.items.map((it) =>
             it.id === String(cartItemId) ? { ...it, quantity } : it
           ),
@@ -183,7 +215,7 @@ export function useRemoveCartItem() {
         method: 'DELETE',
         useAuth: true,
       });
-      return normalizeCart(res.data);
+      return normalizeCart((res.data as any).data ?? res.data);
     },
     onMutate: async ({ cartItemId }) => {
       await qc.cancelQueries({ queryKey: QK.cart() });
@@ -191,6 +223,7 @@ export function useRemoveCartItem() {
 
       if (prev) {
         const next: CartResponse = {
+          ...prev,
           items: prev.items.filter((it) => it.id !== String(cartItemId)),
         };
         qc.setQueryData(QK.cart(), next);
@@ -215,12 +248,12 @@ export function useClearCart() {
         method: 'DELETE',
         useAuth: true,
       });
-      return normalizeCart(res.data);
+      return normalizeCart((res.data as any).data ?? res.data);
     },
     onMutate: async () => {
       await qc.cancelQueries({ queryKey: QK.cart() });
       const prev = qc.getQueryData<CartResponse>(QK.cart());
-      qc.setQueryData(QK.cart(), { items: [] });
+      qc.setQueryData(QK.cart(), { items: [], grandTotal: 0 });
       return { prev };
     },
     onError: (_err, _payload, ctx) => {
