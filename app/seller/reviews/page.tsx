@@ -1,14 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-
 import SellerShell from '@/components/seller/SellerShell';
 import StarRating from '@/components/container/review/StarRating';
 import { useSellerProductReviews } from '@/hooks/useReviews';
-import { useSellerReviewSummary } from '@/hooks/seller/useSellerReviewSummary'; // <- hook yang benar (menembak /api/reviews/product/{id})
+import { useSellerReviewSummary } from '@/hooks/seller/useSellerReviewSummary';
 import { api } from '@/lib/api';
 
 /* =========================
@@ -16,8 +14,10 @@ import { api } from '@/lib/api';
 ========================= */
 type SellerProduct = {
   id: number;
-  name: string;
+  title?: string;
+  name?: string;
   image?: string | null;
+  images?: string[];
 };
 
 type PagedProducts = {
@@ -29,47 +29,28 @@ type PagedProducts = {
 
 /* =========================
    Ambil daftar produk milik seller
-   (gantilah endpoint jika berbeda di backendmu)
+   dari /api/seller/products
 ========================= */
 function useSellerProducts(page = 1, limit = 10, q = '') {
   return useQuery({
     queryKey: ['seller', 'products', page, limit, q],
     queryFn: async (): Promise<PagedProducts> => {
-      const url = `/api/reviews/my?page=${page}&limit=${limit}&q=${encodeURIComponent(
-        q
-      )}`;
       const res = await api<{
         success: boolean;
         message: string;
-        // BE bisa kirim beragam bentuk; normalisasi ke {items,page,limit,total}
-        data:
-          | PagedProducts
-          | { products: SellerProduct[] }
-          | SellerProduct[]
-          | null
-          | undefined;
-      }>(url, { method: 'GET', useAuth: true });
+        data: { products: SellerProduct[] };
+      }>(`/api/seller/products?page=${page}&limit=${limit}&q=${q}`, {
+        method: 'GET',
+        useAuth: true,
+      });
 
-      const raw = res.data;
-
-      // normalisasi
-      if (Array.isArray(raw)) {
-        return { items: raw, page, limit, total: raw.length };
-      }
-      if (raw && 'items' in (raw as any)) {
-        const r = raw as PagedProducts;
-        return {
-          items: r.items ?? [],
-          page: Number(r.page) || page,
-          limit: Number(r.limit) || limit,
-          total: Number(r.total) || (r.items?.length ?? 0),
-        };
-      }
-      if (raw && 'products' in (raw as any)) {
-        const arr = (raw as any).products ?? [];
-        return { items: arr, page, limit, total: arr.length };
-      }
-      return { items: [], page, limit, total: 0 };
+      const products = res.data?.products ?? [];
+      return {
+        items: products,
+        page,
+        limit,
+        total: products.length,
+      };
     },
   });
 }
@@ -94,23 +75,20 @@ export default function SellerReviewsPage() {
     [prod?.items]
   );
 
-  // 2) Ambil ringkasan per produk (avg & total) via /api/reviews/product/{id}
-  const { data: summary, isLoading: loadingSummary } = useSellerReviewSummary(
-    productIds,
-    1,
-    50,
-    q
-  );
+  // 2) Ambil ringkasan review dari /api/reviews/my (grup berdasarkan productId)
+  const { data: summary, isLoading: loadingSummary } =
+    useSellerReviewSummary(productIds);
 
   const rows = useMemo(() => {
     const items = prod?.items ?? [];
     const sItems = summary?.items ?? [];
+
     return items.map((p) => {
       const s = sItems.find((x) => x.productId === p.id);
       return {
         productId: p.id,
-        productName: p.name,
-        productImage: p.image ?? null,
+        productName: p.title ?? p.name ?? `Product ${p.id}`,
+        productImage: p.image ?? p.images?.[0] ?? '/placeholder.png',
         avgRating: s?.avgRating ?? 0,
         totalReview: s?.totalReview ?? 0,
       };
@@ -176,10 +154,7 @@ export default function SellerReviewsPage() {
                       {it.productName}
                     </td>
                     <td className='flex items-center gap-2'>
-                      <StarRating
-                        value={Number(it.avgRating.toFixed(1))}
-                        readOnly
-                      />
+                      <StarRating value={it.avgRating} readOnly />
                       <span className='tabular-nums'>
                         {it.avgRating.toFixed(1)}
                       </span>
@@ -221,7 +196,7 @@ export default function SellerReviewsPage() {
           </table>
         </div>
 
-        {/* Pager (dari daftar produk) */}
+        {/* Pager */}
         {prod && (
           <div className='mt-4 flex items-center justify-end gap-2'>
             <button
@@ -278,7 +253,8 @@ function SellerProductReviewsModal({
 
   const avg =
     items.length > 0
-      ? items.reduce((sum, r) => sum + Number(r.star ?? 0), 0) / items.length
+      ? items.reduce((sum, r) => sum + Number(r.rating ?? r.star ?? 0), 0) /
+        items.length
       : 0;
 
   return (
@@ -334,10 +310,7 @@ function SellerProductReviewsModal({
 
           {items.map((r) => (
             <div key={r.id} className='border-b pb-4 last:border-0'>
-              <div className='mb-1'>
-                <StarRating value={Number(r.star ?? 0)} readOnly />
-              </div>
-              {r.comment && <p className='text-sm'>{r.comment}</p>}
+              {r.comment && <p className='text-sm mb-1'>{r.comment}</p>}
               <div className='mt-1 text-xs text-neutral-500'>
                 {r.author?.name ? (
                   <>

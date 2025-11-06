@@ -11,7 +11,6 @@ import { api } from '@/lib/api';
 import { useBuyerOrders, Order } from '@/hooks/buyer/useBuyerOrders';
 import { CompleteButton } from '@/hooks/buyer/useCompleteOrderItem';
 import LogoutConfirm from '@/components/container/account/LogoutConfirm';
-import ReviewForm from '@/components/container/review/ReviewForm'; // ✅ Tambah import
 
 /* ====================== Utils ====================== */
 const rp = (n: number) =>
@@ -39,8 +38,10 @@ type Me = { id: number; name: string; avatarUrl?: string | null };
 type TabKey = 'ALL' | 'PROCESSING' | 'COMPLETED' | 'CANCELLED';
 
 /* ====================== Tab Mapping ====================== */
+
 function mapOrderToTab(o: Order): TabKey {
   if (o.status === 'CANCELLED') return 'CANCELLED';
+
   if (
     o.items.length &&
     o.items.every(
@@ -48,8 +49,10 @@ function mapOrderToTab(o: Order): TabKey {
     )
   )
     return 'COMPLETED';
+
   if (o.status === 'PAID' || o.items.some((it) => it.status === 'PENDING'))
     return 'PROCESSING';
+
   return 'ALL';
 }
 
@@ -175,13 +178,6 @@ export default function OrdersPage() {
   const [tab, setTab] = useState<TabKey>('ALL');
   const [q, setQ] = useState('');
 
-  //modal review
-  const [openReview, setOpenReview] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<{
-    id: number;
-    name: string;
-  } | null>(null);
-
   useEffect(() => {
     fetchMe().then(setMe);
   }, []);
@@ -242,7 +238,7 @@ export default function OrdersPage() {
                   className='flex items-center gap-2 rounded-xl px-3 py-2 text-zinc-600 hover:bg-zinc-50'
                 >
                   <Image src='/icons/star.svg' alt='' width={16} height={16} />
-                  Reviews
+                  Review
                 </Link>
                 <LogoutConfirm redirectTo='/'>
                   <button className='flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-rose-600 hover:bg-rose-50'>
@@ -374,20 +370,11 @@ export default function OrdersPage() {
                                   </div>
                                 </div>
                               </div>
-
-                              {/* ✅ tampilkan tombol complete order */}
                               {it.status === 'DELIVERED' && (
                                 <CompleteButton
                                   itemId={it.id}
                                   disabled={false}
-                                  onDone={() => {
-                                    refetch();
-                                    setSelectedProduct({
-                                      id: it.product!.id,
-                                      name: productTitle(it.product),
-                                    });
-                                    setOpenReview(true);
-                                  }}
+                                  onDone={refetch}
                                 />
                               )}
                             </li>
@@ -436,23 +423,6 @@ export default function OrdersPage() {
           </div>
         </div>
       </main>
-
-      {/* ✅ Review Modal */}
-      {openReview && selectedProduct && (
-        <ReviewForm
-          open={openReview}
-          productId={selectedProduct.id}
-          productName={selectedProduct.name}
-          onClose={() => {
-            setOpenReview(false);
-            setSelectedProduct(null);
-          }}
-          onSuccess={() => {
-            setOpenReview(false);
-            refetch();
-          }}
-        />
-      )}
 
       <Footer />
     </>

@@ -1,37 +1,39 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/hooks/useReviews.ts
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { api } from '@/lib/api';
-import type { ApiResp } from '@/types/reviews';
-import type { Review, Paged, Eligible } from '@/types/reviews';
+import type { ApiResp, Review, Paged, Eligible } from '@/types/reviews';
 import type { ReviewValues } from '@/validator/review';
 
-/** Normalisasi respons ke bentuk paginated
- *  Aman jika BE kadang balikin array langsung, atau { data: { items,... } }
- */
+/* -------------------------- Utility: pagination helper -------------------------- */
 function toPaged<T>(raw: any, fallbackPage = 1, fallbackLimit = 10): Paged<T> {
   if (Array.isArray(raw)) {
     return {
       items: raw as T[],
       page: fallbackPage,
       limit: fallbackLimit,
-      total: (raw as T[]).length,
+      total: raw.length,
     };
   }
+
   const src = raw?.items ? raw : raw?.data ? raw.data : raw;
   const items: T[] = Array.isArray(src?.items)
-    ? (src.items as T[])
+    ? src.items
     : Array.isArray(src)
-    ? (src as T[])
+    ? src
     : [];
-  const page = Number(src?.page) || fallbackPage;
-  const limit = Number(src?.limit) || fallbackLimit;
-  const total = Number(src?.total) || items.length;
-  return { items, page, limit, total };
+
+  return {
+    items,
+    page: Number(src?.page) || fallbackPage,
+    limit: Number(src?.limit) || fallbackLimit,
+    total: Number(src?.total) || items.length,
+  };
 }
 
+/* ------------------------------- Query Keys ------------------------------- */
 const qk = {
   product: (id: number, page = 1, limit = 10) =>
     ['reviews', 'product', id, page, limit] as const,
@@ -41,7 +43,7 @@ const qk = {
     ['reviews', 'eligible', page, limit] as const,
 };
 
-/** PUBLIC: daftar review untuk 1 produk */
+/* ------------------------ Get reviews for one product ------------------------ */
 export function useProductReviews(productId: number, page = 1, limit = 10) {
   return useQuery({
     queryKey: qk.product(productId, page, limit),
@@ -49,17 +51,19 @@ export function useProductReviews(productId: number, page = 1, limit = 10) {
     queryFn: async (): Promise<Paged<Review>> => {
       const res = await api<ApiResp<any>>(
         `/api/reviews/product/${productId}?page=${page}&limit=${limit}`,
-        { method: 'GET' }
+        {
+          method: 'GET',
+        }
       );
       return toPaged<Review>(res.data, page, limit);
     },
   });
 }
 
-/** Alias supaya import lama di sisi seller tetap jalan */
+/* ----------------------- Alias (seller side compatibility) ----------------------- */
 export const useSellerProductReviews = useProductReviews;
 
-/** AUTH: semua review yang pernah saya tulis */
+/* -------------------------- Get all my reviews (buyer) -------------------------- */
 export function useMyReviews(page = 1, limit = 10, star?: number, q = '') {
   const params = new URLSearchParams({
     page: String(page),
@@ -71,39 +75,109 @@ export function useMyReviews(page = 1, limit = 10, star?: number, q = '') {
   return useQuery({
     queryKey: qk.mine(page, limit, star, q),
     queryFn: async (): Promise<Paged<Review>> => {
-      const res = await api<ApiResp<any>>(
-        `/api/reviews/my?${params.toString()}`,
-        { method: 'GET', useAuth: true }
+      const res = await api<ApiResp<any>>(`/api/reviews/my?${params}`, {
+        method: 'GET',
+        useAuth: true,
+      });
+
+      // Normalisasi data utama
+      const raw = Array.isArray(res.data?.data)
+        ? res.data.data
+        : res.data?.items ?? res.data ?? [];
+
+      // Tambahkan image + fetch shop info dari backend publik
+      const enriched: Review[] = await Promise.all(
+        raw.map(async (r: any) => {
+          const image =
+            Array.isArray(r.product?.images) && r.product.images.length > 0
+              ? r.product.images[0]
+              : '/placeholder.png';
+
+          // Ambil shop
+          if (!r.product?.shop) {
+            try {
+              const productRes = await axios.get(
+                `${process.env.NEXT_PUBLIC_API_URL}/api/products/${r.productId}`
+              );
+              r.product.shop = productRes.data?.data?.product?.shop ?? null;
+            } catch (err: any) {
+              console.warn(
+                `⚠️ Gagal ambil shop untuk product ${r.productId}`,
+                err.message
+              );
+              r.product.shop = { name: 'Unknown Shop' };
+            }
+          }
+
+          return {
+            ...r,
+            product: {
+              ...r.product,
+              image,
+            },
+          };
+        })
       );
-      return toPaged<Review>(res.data, page, limit);
+
+      return {
+        items: enriched,
+        page,
+        limit,
+        total: enriched.length,
+      };
     },
     retry: (failureCount, err: any) =>
       (err?.response?.status ?? 500) !== 401 && failureCount < 2,
   });
 }
 
-/** AUTH: produk yang sudah COMPLETED tapi belum saya review */
+/* ---------------------- Get products eligible for review ---------------------- */
 export function useMyEligible(page = 1, limit = 50) {
   return useQuery({
     queryKey: qk.eligible(page, limit),
     queryFn: async (): Promise<Paged<Eligible>> => {
       const res = await api<ApiResp<any>>(
         `/api/reviews/my/eligible?page=${page}&limit=${limit}`,
-        { method: 'GET', useAuth: true }
+        {
+          method: 'GET',
+          useAuth: true,
+        }
       );
-      return toPaged<Eligible>(res.data, page, limit);
+
+      const raw = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
+
+      const normalized: Eligible[] = raw.map((p: any) => ({
+        productId: p.id,
+        ...p,
+        name: p.title ?? p.name ?? 'Unnamed Product',
+        image:
+          Array.isArray(p.images) && p.images.length > 0
+            ? p.images[0]
+            : '/placeholder.png',
+      }));
+
+      return {
+        items: normalized,
+        page,
+        limit,
+        total: normalized.length,
+      };
     },
     retry: (failureCount, err: any) =>
       (err?.response?.status ?? 500) !== 401 && failureCount < 2,
   });
 }
 
-/** AUTH: upsert review (must purchased & COMPLETED) */
+/* -------------------------- Create / Update review -------------------------- */
 export function useCreateOrUpdateReview(productId: number) {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: async (payload: ReviewValues): Promise<Review> => {
-      // payload shape: { star, comment }
       const res = await api<ApiResp<Review>>('/api/reviews', {
         method: 'POST',
         data: { productId, ...payload },
@@ -112,16 +186,16 @@ export function useCreateOrUpdateReview(productId: number) {
       return res.data;
     },
     onSuccess: () => {
-      // refresh semua daftar review + kemungkinan daftar order
       qc.invalidateQueries({ queryKey: ['reviews'] });
       qc.invalidateQueries({ queryKey: ['orders', 'mine'] });
     },
   });
 }
 
-/** AUTH: hapus review saya */
+/* ------------------------------ Delete my review ------------------------------ */
 export function useDeleteMyReview() {
   const qc = useQueryClient();
+
   return useMutation({
     mutationFn: async (id: number): Promise<number> => {
       await api(`/api/reviews/${id}`, { method: 'DELETE', useAuth: true });
@@ -130,7 +204,6 @@ export function useDeleteMyReview() {
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['reviews'] });
 
-      // optimistic remove pada semua cache "reviews/me"
       const keys = qc
         .getQueryCache()
         .findAll({ queryKey: ['reviews', 'me'] })
@@ -153,9 +226,9 @@ export function useDeleteMyReview() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.prev) {
-        Object.entries(ctx.prev).forEach(([k, v]) => {
-          qc.setQueryData(JSON.parse(k), v);
-        });
+        Object.entries(ctx.prev).forEach(([k, v]) =>
+          qc.setQueryData(JSON.parse(k), v)
+        );
       }
     },
     onSuccess: () => {

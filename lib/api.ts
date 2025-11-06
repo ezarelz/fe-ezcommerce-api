@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // lib/api.ts
 import axios, {
   AxiosError,
@@ -5,6 +6,7 @@ import axios, {
   AxiosRequestConfig,
   AxiosHeaders,
 } from 'axios';
+import type { ApiResp, Paged, Review } from '@/types/reviews';
 
 /* ==========================================================
    BASE URL SETUP
@@ -66,9 +68,6 @@ apiClient.interceptors.request.use((config) => {
 
       // 🔍 Debug: pastikan token dikirim
       if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `🔑 [API] Authorization header attached: Bearer ${t.slice(0, 15)}...`
-        );
       }
     } else if (process.env.NODE_ENV === 'development') {
       console.warn(
@@ -248,4 +247,33 @@ export async function getRelatedProducts(
     limit,
   });
   return products.filter((p) => p.id !== excludeId);
+}
+
+/* ==========================================================
+   REVIEW HELPERS (SELLER & BUYER)
+   ========================================================== */
+
+/**
+ * Ambil semua review untuk satu produk (seller view)
+ * GET /api/reviews/product/{productId}?page=...&limit=...
+ */
+export async function getProductReviewsById(
+  productId: number,
+  page = 1,
+  limit = 50
+): Promise<Review[]> {
+  const query = qs({ page, limit });
+
+  const resp = await api<ApiResp<Paged<Review> | Review[]>>(
+    `/api/reviews/product/${productId}${query}`,
+    { method: 'GET', useAuth: true }
+  );
+
+  // Normalisasi struktur BE (kadang Paged, kadang array langsung)
+  const data =
+    (resp as any)?.data?.items ??
+    (Array.isArray((resp as any)?.data) ? (resp as any)?.data : []) ??
+    [];
+
+  return data;
 }

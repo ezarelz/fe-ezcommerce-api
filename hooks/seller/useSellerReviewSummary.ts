@@ -1,79 +1,70 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import type { ApiResp, Review, Paged } from '@/types/reviews';
-
-export type SellerSummaryItem = {
-  productId: number;
-  productName: string;
-  productImage?: string | null;
-  avgRating: number;
-  totalReview: number;
-};
-
-export type SellerSummaryResp = {
-  items: SellerSummaryItem[];
-  page: number;
-  limit: number;
-  total: number;
-  avgAll: number;
-};
+import { getProductReviewsById } from '@/lib/api';
+import type { Review, SellerSummaryResp } from '@/types/reviews';
 
 /**
- * Ambil ringkasan review untuk beberapa produk milik seller
- * dengan memanggil API /api/reviews/product/{id}?page=...&limit=...
+ * Seller-side summary (fallback ke /api/reviews/my karena BE tidak menyediakan
+ * /api/reviews/product/{id} yang konsisten)
  */
 export function useSellerReviewSummary(
   productIds: number[],
   page = 1,
-  limit = 10,
-  q = ''
+  limit = 50
 ) {
   return useQuery({
-    queryKey: ['seller', 'reviews', 'summary', productIds, page, limit, q],
+    queryKey: ['seller', 'reviews', 'summary', productIds, page, limit],
     enabled: productIds.length > 0,
     queryFn: async (): Promise<SellerSummaryResp> => {
-      // Fetch paralel semua review per produk
       const results = await Promise.all(
         productIds.map(async (pid) => {
-          const res = await api<ApiResp<Paged<Review>>>(
-            `/api/reviews/product/${pid}?page=${page}&limit=${limit}&q=${encodeURIComponent(
-              q
-            )}`,
-            { method: 'GET', useAuth: true }
-          );
+          try {
+            const data: Review[] = await getProductReviewsById(
+              pid,
+              page,
+              limit
+            );
 
-          const items = res.data?.items ?? [];
+            const avg =
+              data.length > 0
+                ? data.reduce(
+                    (acc, r) => acc + Number(r.rating ?? r.star ?? 0),
+                    0
+                  ) / data.length
+                : 0;
 
-          // Hitung rata-rata & total review
-          const avg =
-            items.length > 0
-              ? items.reduce((acc, r) => acc + (r.star ?? 0), 0) / items.length
-              : 0;
+            const first = data[0]?.product;
 
-          return {
-            productId: pid,
-            productName: items[0]?.product?.name ?? `Product ${pid}`,
-            productImage: items[0]?.product?.image ?? null,
-            avgRating: avg,
-            totalReview: items.length,
-          };
+            return {
+              productId: pid,
+              productName: first?.title ?? first?.name ?? `Product ${pid}`,
+              productImage: first?.images?.[0] ?? '/placeholder.png',
+              avgRating: avg,
+              totalReview: data.length,
+            };
+          } catch (err: any) {
+            console.warn(
+              `⚠️ Gagal ambil review untuk product ${pid}`,
+              err.message
+            );
+            return {
+              productId: pid,
+              productName: `Product ${pid}`,
+              productImage: '/placeholder.png',
+              avgRating: 0,
+              totalReview: 0,
+            };
+          }
         })
       );
 
-      // Hitung ringkasan global
       const totalAll = results.reduce((acc, i) => acc + i.totalReview, 0);
       const avgAll =
         results.length > 0
           ? results.reduce((acc, i) => acc + i.avgRating, 0) / results.length
           : 0;
 
-      return {
-        items: results,
-        page,
-        limit,
-        total: totalAll,
-        avgAll,
-      };
+      return { items: results, page, limit, total: totalAll, avgAll };
     },
   });
 }

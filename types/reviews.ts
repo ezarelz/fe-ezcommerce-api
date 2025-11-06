@@ -3,43 +3,33 @@
 /** Response envelope standar dari API */
 export type ApiResp<T> = {
   success: boolean;
-  message: string;
+  message?: string;
   data: T;
 };
 
-/** Satu review produk.
- *  Catatan:
- *  - Backend pakai `star` (wajib). Beberapa tempat mungkin kirim `rating`,
- *    jadi kita sediakan optional `rating?` untuk kompatibilitas.
- *  - `author` opsional agar buyer-side bisa menampilkan nama penulis,
- *    dan seller-side bisa melihat siapa yang mereview.
- *  - `product` berisi info ringkas produk agar mudah dirender di buyer-side.
- */
+/** Review milik user */
 export type Review = {
   id: number;
   productId: number;
-  star: number; // skor 1..5 (sumber utama)
-  rating?: number; // alias opsional jika BE mengirim 'rating'
+  star: number;
+  rating?: number;
   comment: string;
   createdAt: string;
-
   author?: {
-    // informasi penulis (opsional)
     id?: number;
     name?: string;
     avatarUrl?: string | null;
   };
-
   product?: {
-    // informasi produk (opsional, untuk listing milik saya)
     id: number;
-    name: string;
-    image?: string | null;
-    shopName?: string;
+    title?: string;
+    name?: string;
+    images?: string[];
+    shop?: { id?: number; name?: string };
   };
 };
 
-/** Bentuk paginated yang distandarkan oleh hooks (toPaged) */
+/** Struktur paginated standar */
 export type Paged<T> = {
   items: T[];
   page: number;
@@ -49,19 +39,21 @@ export type Paged<T> = {
 
 /** Item eligible = produk yang dibeli & COMPLETED tapi belum direview */
 export type Eligible = {
-  orderItemId: number;
   productId: number;
-  productName: string;
-  productImage?: string | null;
-  completedAt: string;
+  name: string;
+  images?: string[]; // gunakan array
+  image?: string; // tetap boleh ada jika hooks mengisi single image (backwards compat)
+  shop?: { id?: number; name?: string };
+  shopName?: string; // backward compat if you earlier used shopName
+  price?: number;
 };
 
-/** ====== Tambahan untuk sisi SELLER (ringkasan per produk) ====== */
+/** Ringkasan review untuk sisi SELLER */
 export type SellerSummaryItem = {
   productId: number;
   productName: string;
   productImage?: string | null;
-  avgRating: number; // 0..5
+  avgRating: number;
   totalReview: number;
 };
 
@@ -69,6 +61,6 @@ export type SellerSummaryResp = {
   items: SellerSummaryItem[];
   page: number;
   limit: number;
-  total: number; // total keseluruhan review (akumulasi)
-  avgAll: number; // rata-rata gabungan semua produk
+  total: number;
+  avgAll: number;
 };

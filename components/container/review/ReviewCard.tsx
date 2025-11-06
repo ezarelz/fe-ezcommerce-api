@@ -1,55 +1,51 @@
-// src/components/review/ReviewCard.tsx
+'use client';
+
 import Image from 'next/image';
-import StarRating from '@/components/container/review/StarRating';
-import type { Review } from '@/types/reviews';
+import StarRating from './StarRating';
 
-export function ReviewCard({ r }: { r: Review }) {
+interface ReviewCardProps {
+  productName?: string;
+  productImage?: string;
+  rating: number;
+  comment: string;
+  date?: string;
+}
+
+export default function ReviewCard({
+  productName,
+  productImage,
+  rating,
+  comment,
+  date,
+}: ReviewCardProps) {
   return (
-    <div className='rounded-2xl border bg-white p-4 shadow-sm dark:bg-neutral-900'>
-      <div className='flex items-center gap-2 text-sm text-neutral-500'>
-        <span className='tabular-nums'>
-          {new Date(r.createdAt).toLocaleString('id-ID', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </span>
-      </div>
-
-      <div className='mt-3 flex gap-3'>
-        {r.product?.image ? (
+    <div className='rounded-2xl border p-4 dark:border-neutral-800'>
+      <div className='flex items-start gap-3'>
+        {productImage && (
           <Image
-            src={r.product.image}
-            alt={r.product?.name ?? 'product'}
-            width={56}
-            height={56}
-            className='rounded-md object-cover'
+            src={productImage}
+            alt={productName || 'product'}
+            width={64}
+            height={64}
+            className='rounded object-cover'
           />
-        ) : (
-          <div className='h-14 w-14 rounded-md bg-neutral-200' />
         )}
-
-        <div className='min-w-0'>
-          <div className='text-sm text-neutral-500'>{r.product?.shopName}</div>
-          <div className='font-medium'>{r.product?.name}</div>
-
-          <div className='mt-2 flex items-center gap-2'>
-            <StarRating value={r.star} readOnly />
-            <span className='text-sm tabular-nums text-neutral-600 dark:text-neutral-300'>
-              {r.star}.0
-            </span>
-          </div>
-
-          <p className='mt-2 text-sm text-neutral-700 dark:text-neutral-200'>
-            {r.comment}
+        <div className='flex-1'>
+          {productName && (
+            <h3 className='mb-1 text-sm font-medium'>{productName}</h3>
+          )}
+          <StarRating value={rating} readOnly />
+          <p className='mt-1 text-sm text-neutral-700 dark:text-neutral-300'>
+            {comment}
           </p>
-
-          {r.product && (
-            <div className='mt-2 text-xs text-neutral-500'>
-              Produk #{r.product.id}
-            </div>
+          {date && (
+            <p className='mt-1 text-xs text-neutral-500'>
+              {new Date(date).toLocaleDateString('id-ID', {
+                day: '2-digit',
+                month: 'long',
+                year: 'numeric',
+              })}
+            </p>
           )}
         </div>
       </div>
