@@ -241,7 +241,7 @@ export default function Header() {
 
                 {/* ✅ mobile juga diarahkan ke dashboard */}
                 {!isSeller ? (
-                  <Link href='/seller/dashboard' className='py-2'>
+                  <Link href='/seller/activate' className='py-2'>
                     Open Store
                   </Link>
                 ) : (
