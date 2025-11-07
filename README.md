@@ -1,6 +1,6 @@
 # 🛍️ E-Commerce WPH API - Challenge Ezar WPH048
 
-A modern RESTful API built for the **WPH Bootcamp E-Commerce Project**.  
+A modern RESTful API built for the **E-Commerce Project - With Custom Backend (Swagger) **.  
 This backend powers the **Next.js + TypeScript + Tailwind** frontend, enabling buyer–seller interactions, product management, checkout, and order workflows.
 
 ---
@@ -80,7 +80,6 @@ This backend powers the **Next.js + TypeScript + Tailwind** frontend, enabling b
 ## 🧾 License
 
 **Free to Use — Open for Learning and Portfolio Projects**  
-This project is built using the official **WPH (Web Programming Hack Bootcamp)** backend API.  
 You are free to **modify, reuse, and distribute** this project for **educational or non-commercial** purposes.
 
-Attribution to the original creator **Manggala Eleazar** and **WPH Bootcamp** is appreciated but not required.
+Attribution to the original creator **Manggala Eleazar** is appreciated but not required.
