@@ -25,7 +25,7 @@ export default function Header() {
   const { data: me } = useMe();
 
   // ✅ ganti deteksi seller pakai keberadaan shop (hasil aktivasi dari BE)
-  const isSeller = !!me?.isActive;
+  const isSeller = !!me?.isSeller;
   const initials =
     me?.name
       ?.split(' ')
@@ -103,8 +103,8 @@ export default function Header() {
           {me && (
             <div className='hidden items-center gap-2 lg:flex'>
               {/* ✅ Buyer → Open Store (ke dashboard, BE sudah aktifkan) ; Seller → Dashboard */}
-              {isSeller ? (
-                <Link href='/seller/dashboard'>
+              {!isSeller ? (
+                <Link href='/seller/activate'>
                   <Button variant='outline' className='rounded-2xl'>
                     <Image
                       src='/icons/store-ico.svg'

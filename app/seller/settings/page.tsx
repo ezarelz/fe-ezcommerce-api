@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const DOMAIN_PREFIX = 'www.shirt.com/';
+const DOMAIN_PREFIX = '';
 
 export default function SellerSettingsPage() {
   const { data: shop, isLoading, isError } = useShopProfile();
@@ -109,7 +109,9 @@ export default function SellerSettingsPage() {
                       <div className='text-sm opacity-70'>Store Name</div>
                       <div className='mb-3 font-medium'>{shop.name}</div>
 
-                      <div className='text-sm opacity-70'>Store Domain</div>
+                      <div className='text-sm opacity-70'>
+                        Store Domain / Desc
+                      </div>
                       <div className='mb-3 text-sm'>
                         {DOMAIN_PREFIX}
                         <span className='font-mono'>{shop.slug}</span>

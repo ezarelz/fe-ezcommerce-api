@@ -26,11 +26,18 @@ export function useShopProfile() {
   return useQuery({
     queryKey: qk.shop,
     queryFn: async (): Promise<Shop> => {
-      const res = await api<ApiResp<Shop>>('/api/seller/shop', {
+      // ⬇️ langsung ambil object, karena BE tidak membungkus data
+      const res = await api<Shop>('/api/seller/shop', {
         method: 'GET',
         useAuth: true,
       });
-      return res.data;
+
+      // just in case API error
+      if (!res || typeof res !== 'object') {
+        throw new Error('Invalid response structure');
+      }
+
+      return res;
     },
   });
 }
@@ -55,9 +62,9 @@ export function useUpdateShopProfile() {
       const res = await api<ApiResp<Shop>>('/api/seller/shop', {
         method: 'PATCH',
         useAuth: true,
-        data: fd, // ✅ axios pakai data, bukan body
+        data: fd,
       });
-      return res.data;
+      return res;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.shop });

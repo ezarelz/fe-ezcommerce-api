@@ -20,7 +20,7 @@ import { InfiniteData } from '@tanstack/react-query';
 
 // ====== CONFIG: pilih ID yang ingin ditampilkan di landing ======
 const START_ID = 1;
-const END_ID = 10; // ubah angka ini untuk range lain
+const END_ID = 17; // ubah angka ini untuk range lain
 const SELECTED_IDS: number[] = Array.from(
   { length: END_ID - START_ID + 1 },
   (_, i) => START_ID + i

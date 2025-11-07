@@ -5,7 +5,7 @@ import './globals.css';
 import { ReactQueryProvider } from '@/lib/queryClient';
 
 export const metadata: Metadata = {
-  title: 'Shirt — Ecommerce',
+  title: 'Shirt — Ecommerce - Web',
   description: 'Stylish fashion apparel for every occasion',
 };
 
